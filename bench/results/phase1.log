@@ -1,0 +1,98 @@
+﻿Device: 4178ab90	device
+Memory before we start: MemAvailable:    1845924 kB
+
+=== silicon facts -> D:\omnitalk\bench\results\device_info_POCO_M2_Pro.txt ===
+  saved.
+>>> BIG=0xc0 (2)  LITTLE=0x3f (6)
+
+=== pushing ===
+powershell : adb.exe : D:\omnitalk\prebuilt\llama-cli: 1 file pushed, 0 skipped. 64.7 MB/s (20789160 bytes in 0.306s)
+At line:1 char:302
++ ... tch {} } }; powershell -NoProfile -ExecutionPolicy Bypass -File 'D:\o ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (adb.exe : D:\om...ytes in 0.306s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+At D:\omnitalk\scripts\phase1_device.ps1:80 char:30
++ ...  (Test-Path "$PRE\$f") { & $ADB push "$PRE\$f" "$DEV/$f" 2>&1 | Selec ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\omnitalk\pre...ytes in 0.306s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+adb.exe : D:\omnitalk\prebuilt\llama-bench: 1 file pushed, 0 skipped. 31.6 MB/s (4932680 bytes in 0.149s)
+At D:\omnitalk\scripts\phase1_device.ps1:80 char:30
++ ...  (Test-Path "$PRE\$f") { & $ADB push "$PRE\$f" "$DEV/$f" 2>&1 | Selec ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\omnitalk\pre...ytes in 0.149s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+adb.exe : D:\omnitalk\prebuilt\llama-bench-nokleidi: 1 file pushed, 0 skipped. 27.4 MB/s (4903088 bytes in 0.170s)
+At D:\omnitalk\scripts\phase1_device.ps1:80 char:30
++ ...  (Test-Path "$PRE\$f") { & $ADB push "$PRE\$f" "$DEV/$f" 2>&1 | Selec ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\omnitalk\pre...ytes in 0.170s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+adb.exe : D:\omnitalk\prebuilt\whisper-cli: 1 file pushed, 0 skipped. 43.9 MB/s (2147000 bytes in 0.047s)
+At D:\omnitalk\scripts\phase1_device.ps1:80 char:30
++ ...  (Test-Path "$PRE\$f") { & $ADB push "$PRE\$f" "$DEV/$f" 2>&1 | Selec ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\omnitalk\pre...ytes in 0.047s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+adb.exe : D:\omnitalk\third_party\whisper.cpp\samples\jfk.wav: 1 file pushed, 0 skipped. 21.5 MB/s (352078 bytes in 
+0.016s)
+At D:\omnitalk\scripts\phase1_device.ps1:82 char:1
++ & $ADB push "D:\omnitalk\third_party\whisper.cpp\samples\jfk.wav" "$D ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\omnitalk\thi...ytes in 0.016s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  ok (size matches): Llama-3.2-1B-Instruct-Q4_0.gguf
+  ok (size matches): Llama-3.2-1B-Instruct-Q4_K_M.gguf
+  ok (size matches): ggml-base-q5_1.bin
+  ok (size matches): ggml-tiny-q5_1.bin
+
+============ GATE 1: first token ============
+  mem before: MemAvailable:    1816360 kB
+error: invalid argument: --no-cnv
+  mem after: MemAvailable:    1820104 kB
+    (cooldown 5s)
+
+============ O1: KleidiAI kernel selection ============
+--- Q4_0 ---
+  (no kleidi/repack line)
+    (cooldown 5s)
+--- Q4_K_M ---
+  (no kleidi/repack line)
+    (cooldown 5s)
+
+============ GATE 2: Whisper RTF (LITTLE cluster) ============
+--- ggml-tiny-q5_1.bin (t=6 on 0x3f) ---
+    (cooldown 5s)
+--- ggml-base-q5_1.bin (t=6 on 0x3f) ---
+    (cooldown 5s)
+RTF = total_time / 11.0 s.  Need < 0.7 to use 'base'.
+
+============ GATE 3: concurrency ============
+  mem before: MemAvailable:    1825200 kB
+--- solo: LLM on big ---
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| llama 1B Q4_0                  | 729.75 MiB |     1.24 B | CPU        |       2 |           pp128 |         12.89 ± 0.01 |
+| llama 1B Q4_0                  | 729.75 MiB |     1.24 B | CPU        |       2 |            tg32 |          8.74 ± 0.02 |
+
+build: 9558fa4 (1)
+    (cooldown 10s)
+--- concurrent: LLM on big + Whisper(tiny) on LITTLE ---
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| llama 1B Q4_0                  | 729.75 MiB |     1.24 B | CPU        |       2 |           pp128 |         12.91 ± 0.01 |
+| llama 1B Q4_0                  | 729.75 MiB |     1.24 B | CPU        |       2 |            tg32 |          8.72 ± 0.05 |
+
+build: 9558fa4 (1)
+  mem after: MemAvailable:    2056424 kB
+GATE 3 passes if concurrent tok/s >= 80% of solo.
+
+=== done. results in D:\omnitalk\bench\results ===
+Final memory: MemAvailable:    2056112 kB

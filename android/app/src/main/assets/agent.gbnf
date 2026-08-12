@@ -1,0 +1,22 @@
+# FIELD ORDER IS A LATENCY OPTIMIZATION (O8) — DO NOT REORDER.
+#
+# "q" is emitted FIRST so TTS can start speaking after ~12 tokens instead of
+# waiting for the whole object (~60 tokens). At the ~9 tok/s this device decodes,
+# putting the slots first would delay first audio by roughly 5 seconds.
+#
+# Single-letter keys are also deliberate: "next_question" costs ~4 tokens every
+# turn, "q" costs 1. Across four fields that is ~10 tokens ~= 1.1 s per turn.
+#
+#   q = the question to speak, in the target language
+#   g = its English gloss (so a judge who does not speak the language can follow)
+#   s = slots learned from what was just heard
+#   d = done
+root  ::= "{" ws "\"q\"" ws ":" ws str ws ","
+              ws "\"g\"" ws ":" ws str ws ","
+              ws "\"s\"" ws ":" ws obj ws ","
+              ws "\"d\"" ws ":" ws bool ws "}"
+obj   ::= "{" ws (pair (ws "," ws pair)*)? ws "}"
+pair  ::= str ws ":" ws (str | "null")
+str   ::= "\"" ([^"\\] | "\\" ["\\/bfnrt])* "\""
+bool  ::= "true" | "false"
+ws    ::= [ \t\n]*

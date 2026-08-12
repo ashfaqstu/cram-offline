@@ -34,3 +34,12 @@ __pycache__/
 
 # ── keep benchmark outputs, they ARE the submission ───────────────────────────
 !bench/results/**
+
+# app build outputs
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+native/build-test/
+native/build-agptest/
+prebuilt/

@@ -1,0 +1,31 @@
+﻿# Captured 2026-08-13T00:41:41.1036193+06:00
+model     : POCO M2 Pro
+board     : atoll
+android   : 11
+abi       : arm64-v8a
+
+## /proc/cpuinfo Features (expect asimddp; NO i8mm/sve/sme)
+Features	: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp
+
+## per-core max frequency (kHz)
+cpu0 1804800
+cpu1 1804800
+cpu2 1804800
+cpu3 1804800
+cpu4 1804800
+cpu5 1804800
+cpu6 2323200
+cpu7 2323200
+
+## memory
+MemTotal:        5714636 kB
+MemFree:           91716 kB
+MemAvailable:    1845100 kB
+
+## storage
+Filesystem       Size  Used Avail Use% Mounted on
+/dev/block/sda18  45G   41G  3.8G  92% /data/user/0
+
+## derived masks
+BIG_MASK=0xc0 n=2
+LITTLE_MASK=0x3f n=6

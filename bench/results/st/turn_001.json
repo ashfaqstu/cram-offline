@@ -1,0 +1,58 @@
+{
+  "seq": 1,
+  "lang": "en",
+  "mode": "turbo",
+  "audio_samples": 92720,
+  "audio_seconds": 5.795,
+  "audio_peak": 0.9460449,
+  "transcript": " Hello, welcome to the ticket calendar. How can I help you today? [BLANK_AUDIO]",
+  "raw_output": "{\"q\":\"What is the ticket price?\",\"g\":\"What is the ticket price?\",\"s\":{\"price\":\"50\"}, \"d\":false}",
+  "timings": {
+    "prefill_ms": 7238.3,
+    "prefill_tok": 63,
+    "prefill_tps": 8.7,
+    "decode_ms": 5764.3,
+    "decode_tok": 30,
+    "decode_tps": 5.2,
+    "n_past": 264
+  },
+  "trace": {
+    "label": "turbo",
+    "first_audio_ms": 48480.804825,
+    "marks": [
+      {
+        "mark": "capture_start",
+        "ms": 50.504636
+      },
+      {
+        "mark": "end_of_speech",
+        "ms": 13627.444943
+      },
+      {
+        "mark": "asr_done",
+        "ms": 13627.468068
+      },
+      {
+        "mark": "prefill_done",
+        "ms": 60159.800706
+      },
+      {
+        "mark": "first_audio",
+        "ms": 62108.249768
+      },
+      {
+        "mark": "decode_done",
+        "ms": 65925.045079
+      }
+    ]
+  },
+  "question": "What is the ticket price?",
+  "gloss": "What is the ticket price?",
+  "turn": 1,
+  "slots": {
+    "departure": null,
+    "ac": null,
+    "price": null
+  },
+  "objective": "Bus ticket"
+}

@@ -1,0 +1,54 @@
+{
+  "seq": 3,
+  "lang": "bn",
+  "mode": "turbo",
+  "audio_samples": 28672,
+  "audio_seconds": 1.792,
+  "audio_peak": 0.14505005,
+  "transcript": " Kiko",
+  "raw_output": " Bengali: কিকো\nEnglish: Kiko\nThey said: \"আমরা বাস বাড়তে পারি এবং আমরা বাস বাড়তে পারে এমন সময় বিবেচনা করছি। আমরা বাস বাড়তে পারে এমন সময় কোনো সময় কোন?",
+  "timings": {
+    "prefill_ms": 1424.2,
+    "prefill_tok": 24,
+    "prefill_tps": 16.85,
+    "decode_ms": 21862.2,
+    "decode_tok": 160,
+    "decode_tps": 7.32,
+    "n_past": 453
+  },
+  "trace": {
+    "label": "turbo",
+    "first_audio_ms": null,
+    "marks": [
+      {
+        "mark": "capture_start",
+        "ms": 0.309531
+      },
+      {
+        "mark": "end_of_speech",
+        "ms": 5260.004269
+      },
+      {
+        "mark": "asr_done",
+        "ms": 5260.02255
+      },
+      {
+        "mark": "prefill_done",
+        "ms": 6685.284216
+      },
+      {
+        "mark": "decode_done",
+        "ms": 28548.599625
+      }
+    ]
+  },
+  "question": "",
+  "gloss": "",
+  "turn": 0,
+  "slots": {
+    "departure": null,
+    "ac": null,
+    "price": null
+  },
+  "objective": "Bus ticket"
+}

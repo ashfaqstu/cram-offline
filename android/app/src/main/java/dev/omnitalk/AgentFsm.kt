@@ -64,26 +64,106 @@ class AgentFsm(val objective: Objective, private val maxTurns: Int = 6) {
     var lastQuestion = ""; private set
     var lastGloss = ""; private set
     var modelSaysDone = false; private set
+    /** Slot values rejected as unsupported by the transcript — surfaced for the write-up. */
+    val rejected = mutableListOf<String>()
 
     /** Parse one grammar-constrained reply. Returns false if it was unusable. */
-    fun ingest(json: String): Boolean {
+    fun ingest(json: String, heard: String = ""): Boolean {
         val obj = runCatching { JSONObject(extractObject(json)) }.getOrNull() ?: return false
 
         lastQuestion = obj.optString("q", lastQuestion)
         lastGloss = obj.optString("g", "")
-        modelSaysDone = obj.optBoolean("d", false)
+        // Do NOT trust the model's own "done". It set d=true on turn 1 after
+        // inventing every slot. Completion is decided by the slots we accepted.
+        modelSaysDone = false
 
-        obj.optJSONObject("s")?.let { s ->
-            for (slot in objective.slots) {
-                if (slot.value != null) continue          // never overwrite a known fact
-                if (!s.has(slot.key)) continue
-                if (s.isNull(slot.key)) continue
-                val v = s.optString(slot.key).trim()
-                if (v.isNotEmpty() && !v.equals("null", true)) slot.value = v
-            }
-        }
+        obj.optJSONObject("s")?.let { s -> mergeSlots(s, heard) }
         turn++
         return true
+    }
+
+    private fun mergeSlots(s: org.json.JSONObject, heard: String) {
+        // The model answers with whatever key it likes — usually the human LABEL
+        // we put in the prompt ("departure times"), not our internal key
+        // ("departure"). Match on either, normalised.
+        val byName = HashMap<String, Slot>()
+        for (slot in objective.slots) {
+            byName[norm(slot.key)] = slot
+            byName[norm(slot.label)] = slot
+        }
+
+        for (k in s.keys()) {
+            val slot = byName[norm(k)] ?: continue
+            if (slot.value != null) continue              // never overwrite a known fact
+            if (s.isNull(k)) continue
+            val v = s.optString(k).trim()
+            if (v.isEmpty() || v.equals("null", true)) continue
+
+            // ANTI-HALLUCINATION. A 1B model will not honour "copied never
+            // invented" on instruction alone: asked only "Hello, welcome to the
+            // ticket counter", it confidently returned departure="6:00 AM",
+            // ac="Yes", price="50" and declared itself done. Require the value to
+            // be supported by something actually said.
+            if (!supportedBy(v, heard, slot)) {
+                rejected += "${slot.key}='$v'"
+                continue
+            }
+            slot.value = v
+        }
+    }
+
+    /**
+     * Is this value actually supported by what the person just said?
+     *
+     * The model reliably copies values out of the prompt's worked example — it
+     * returned departure="7 am" on a turn where the speaker only discussed air
+     * conditioning and price. So evidence is required, in this order:
+     *
+     *  1. Any digits in the value MUST appear in the transcript. This is the rule
+     *     that catches echoed examples, because invented facts are nearly always
+     *     numbers (times, prices) that were never spoken.
+     *  2. Otherwise a content word must be shared.
+     *  3. A bare "yes"/"no" is accepted only if the transcript actually discussed
+     *     that slot's topic — "Only the 10 o'clock bus has air conditioning"
+     *     legitimately supports ac="Yes" even though the word "yes" never occurs.
+     */
+    private fun supportedBy(value: String, heard: String, slot: Slot): Boolean {
+        if (heard.isBlank()) return false
+        val h = heard.lowercase()
+        val hWords = h.split(NONWORD).filter { it.length >= 3 }.toSet()
+
+        val vDigits = DIGITS.findAll(value).map { it.value }.toList()
+        if (vDigits.isNotEmpty()) {
+            val hDigits = DIGITS.findAll(h).map { it.value }.toSet()
+            return vDigits.any { it in hDigits }      // unsupported number -> reject
+        }
+
+        val vWords = value.lowercase().split(NONWORD).filter { it.length >= 3 }
+        if (vWords.any { it in hWords }) return true
+
+        val short = value.lowercase().trim().trim('.', '!')
+        if (short in YES_NO) {
+            // topic must have been raised, e.g. slot "air conditioning" vs the transcript
+            return slot.label.lowercase().split(NONWORD)
+                .filter { it.length >= 3 }
+                .any { it in hWords }
+        }
+        return false
+    }
+
+    companion object {
+        private val DIGITS = Regex("\\d+")
+        private val NONWORD = Regex("[^\\p{L}\\p{N}]+")
+        private val YES_NO = setOf("yes", "no", "yeah", "yep", "nope", "true", "false", "available", "unavailable")
+
+        /** Grammar guarantees valid JSON, but be defensive for the ungrammared A/B arm. */
+        fun extractObject(raw: String): String {
+            val i = raw.indexOf('{')
+            val j = raw.lastIndexOf('}')
+            return if (i >= 0 && j > i) raw.substring(i, j + 1) else raw
+        }
+
+        private fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
     }
 
     fun done() = objective.complete || modelSaysDone || turn >= maxTurns
@@ -100,12 +180,4 @@ class AgentFsm(val objective: Objective, private val maxTurns: Int = 6) {
         }.trim()
     }
 
-    companion object {
-        /** Grammar guarantees valid JSON, but be defensive for the ungrammared A/B arm. */
-        fun extractObject(raw: String): String {
-            val i = raw.indexOf('{')
-            val j = raw.lastIndexOf('}')
-            return if (i >= 0 && j > i) raw.substring(i, j + 1) else raw
-        }
-    }
 }

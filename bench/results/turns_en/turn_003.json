@@ -1,0 +1,58 @@
+{
+  "seq": 3,
+  "lang": "en",
+  "mode": "turbo",
+  "audio_samples": 45056,
+  "audio_seconds": 2.816,
+  "audio_peak": 0.9999695,
+  "transcript": " At 10am.",
+  "raw_output": "{ \"q\": \"What is the departure time of the bus\", \"g\": \"The bus has air conditioning\", \"s\": {\"departure times\": \"The bus departs at 10:00 AM\", \"air conditioning\": \"Yes\", \"ticket price\": \"50\" } , \"d\": true }",
+  "timings": {
+    "prefill_ms": 1436.4,
+    "prefill_tok": 26,
+    "prefill_tps": 18.1,
+    "decode_ms": 12450.7,
+    "decode_tok": 64,
+    "decode_tps": 5.14,
+    "n_past": 369
+  },
+  "trace": {
+    "label": "turbo",
+    "first_audio_ms": 3999.281613,
+    "marks": [
+      {
+        "mark": "capture_start",
+        "ms": 0.376823
+      },
+      {
+        "mark": "end_of_speech",
+        "ms": 7230.012914
+      },
+      {
+        "mark": "asr_done",
+        "ms": 7230.026769
+      },
+      {
+        "mark": "prefill_done",
+        "ms": 8667.350987
+      },
+      {
+        "mark": "first_audio",
+        "ms": 11229.294527
+      },
+      {
+        "mark": "decode_done",
+        "ms": 21118.778794
+      }
+    ]
+  },
+  "question": "What is the departure time of the bus",
+  "gloss": "The bus has air conditioning",
+  "turn": 3,
+  "slots": {
+    "departure": null,
+    "ac": null,
+    "price": null
+  },
+  "objective": "Bus ticket"
+}

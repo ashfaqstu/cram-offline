@@ -199,6 +199,10 @@ Java_dev_omnitalk_Native_llmGenerate(JNIEnv* env, jobject, jlong h, jint max_tok
     double t0 = now_ms();
     int n = 0;
 
+    // llama.cpp throws std::runtime_error from the grammar sampler. An escaped
+    // C++ exception aborts the whole process rather than failing the turn, so
+    // the loop is wrapped: a bad turn should degrade, not kill the app.
+    try {
     for (; n < max_tokens; ++n) {
         if (L->n_past >= n_ctx - 1) { LOGE("hit n_ctx during generate"); break; }
 
@@ -218,10 +222,21 @@ Java_dev_omnitalk_Native_llmGenerate(JNIEnv* env, jobject, jlong h, jint max_tok
             }
         }
 
-        llama_sampler_accept(chain, tok);
+        // NO llama_sampler_accept() here. llama_sampler_sample() already accepts
+        // internally (see the pseudocode above its declaration in llama.h).
+        // Calling it again advances the grammar twice per token, and the second
+        // advance past the opening "{" empties the grammar stack:
+        //   std::runtime_error: Unexpected empty grammar stack after accepting
+        //   piece: { (90)
+        // which surfaces as SIGABRT from libc++, not as a return code.
         llama_batch b = llama_batch_get_one(&tok, 1);
         if (llama_decode(L->ctx, b) != 0) { LOGE("llama_decode failed in generate"); break; }
         L->n_past++;
+    }
+    } catch (const std::exception& e) {
+        LOGE("generate aborted: %s", e.what());
+    } catch (...) {
+        LOGE("generate aborted: unknown C++ exception");
     }
 
     L->last_decode_ms  = now_ms() - t0;

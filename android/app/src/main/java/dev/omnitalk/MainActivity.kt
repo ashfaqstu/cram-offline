@@ -51,7 +51,30 @@ class MainActivity : ComponentActivity() {
         setContent { MaterialTheme(colorScheme = darkColorScheme()) { Root(vm) } }
 
         if (!vm.micGranted) askMic.launch(Manifest.permission.RECORD_AUDIO)
-        lifecycleScope.launch { vm.boot() }
+        lifecycleScope.launch {
+            vm.boot()
+            handleSelfTest(intent)
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        lifecycleScope.launch { handleSelfTest(intent) }
+    }
+
+    /** `--es selftest <file.wav>` and optional `--es lang <bn|hi|es|en>` / `--ez turbo <bool>` */
+    private fun handleSelfTest(intent: android.content.Intent?) {
+        val wav = intent?.getStringExtra("selftest") ?: return
+        intent.getStringExtra("lang")?.let { code ->
+            Lang.entries.firstOrNull { it.code == code }?.let { vm.applyLanguage(it) }
+        }
+        if (intent.hasExtra("turbo")) {
+            val want = intent.getBooleanExtra("turbo", true)
+            if (want != vm.turbo) { vm.toggleTurbo(); return }   // reload, then re-issue
+        }
+        if (intent.getBooleanExtra("reset", false)) vm.startObjective(vm.objective)
+        vm.runFromWav(wav)
     }
 
     override fun onDestroy() { vm.close(); super.onDestroy() }
@@ -66,8 +89,13 @@ class AppState(private val act: ComponentActivity) {
     var status by mutableStateOf("starting…")
     var loaded by mutableStateOf(false)
     var turbo by mutableStateOf(true)
-    /** Default Bengali: the developer speaks it, so results are verifiable while building. */
-    var lang by mutableStateOf(Lang.BN)
+    /**
+     * English while validating: Whisper is strongest there, so an English pass
+     * proves the pipeline and isolates any remaining failure to the language.
+     * Switch to HI/ES for the demo once the loop is verified. Bengali measured
+     * unusable with tiny/base — see Lang.kt.
+     */
+    var lang by mutableStateOf(Lang.EN)
     var voiceOk by mutableStateOf(true)
     var recording by mutableStateOf(false)
     var partial by mutableStateOf("")
@@ -93,6 +121,7 @@ class AppState(private val act: ComponentActivity) {
 
     suspend fun boot() {
         grammar = act.assets.open("agent.gbnf").bufferedReader().readText()
+        TurnLog.init(modelDir)
 
         if (!llmPath.exists() || !asrPath.exists()) {
             status = "Models missing. adb push them to:\n${modelDir.absolutePath}"
@@ -141,10 +170,11 @@ class AppState(private val act: ComponentActivity) {
         partial = ""
         trace = Trace(if (turbo) "turbo" else "naive")
         tts?.armFirstAudioMark()
+        TurnLog.begin()
 
         act.lifecycleScope.launch {
             val p = pipeline ?: return@launch
-            val audio = Audio.record(2.0) { stopFlag }
+            val audio = Audio.record(5.0) { stopFlag }
             val raw = p.runTurn(
                 audio = audio,
                 promptSuffix = { heard -> Prompts.turnSuffix(fsm, heard) },
@@ -154,6 +184,9 @@ class AppState(private val act: ComponentActivity) {
                 onPartial = { partial = it },
                 onSentence = { s -> tts?.speak(s) }
             )
+            val parsed = if (raw.isNotBlank()) fsm.ingest(raw, partial) else false
+            TurnLog.finish(trace, partial, raw, p.lastTimings, lang.code, turbo, fsm)
+
             withContext(Dispatchers.Main) {
                 if (raw.isBlank()) {
                     lines += Line("agent", "(heard nothing — hold longer and speak up)", "")
@@ -161,7 +194,7 @@ class AppState(private val act: ComponentActivity) {
                     return@withContext
                 }
                 if (partial.isNotBlank()) lines += Line("them", partial, "")
-                if (fsm.ingest(raw)) {
+                if (parsed) {
                     lines += Line("agent", fsm.lastQuestion, fsm.lastGloss)
                 } else {
                     lines += Line("agent", "(unparseable reply)", raw.take(120))
@@ -175,6 +208,66 @@ class AppState(private val act: ComponentActivity) {
     }
 
     fun onPressEnd() { stopFlag = true }
+
+    /**
+     * Run one turn from a WAV instead of the microphone.
+     *
+     *   adb shell am start -n dev.omnitalk/.MainActivity --es selftest test1.wav
+     *
+     * Same Pipeline, same prompts, same grammar, same TurnLog output — only the
+     * audio source differs. Lets the agent loop be regression-tested after every
+     * change without a human speaking, and makes a failure replayable.
+     */
+    fun runFromWav(name: String) {
+        if (!loaded || recording) return
+        val f = File(modelDir, name)
+        if (!f.exists()) { status = "selftest: $name not found"; return }
+        recording = true
+        partial = ""
+        trace = Trace(if (turbo) "turbo" else "naive")
+        tts?.armFirstAudioMark()
+        TurnLog.begin()
+        status = "selftest: $name"
+
+        act.lifecycleScope.launch {
+            val p = pipeline ?: return@launch
+            val samples = withContext(Dispatchers.IO) { Audio.readWav(f) }
+            if (samples.isEmpty()) {
+                status = "selftest: $name unreadable"; recording = false; return@launch
+            }
+            // feed it in the same 5 s chunks the microphone would produce
+            val chunk = (Audio.SAMPLE_RATE * 5.0).toInt()
+            val flow = kotlinx.coroutines.flow.flow {
+                var i = 0
+                while (i < samples.size) {
+                    val n = minOf(chunk, samples.size - i)
+                    emit(samples.copyOfRange(i, i + n))
+                    i += n
+                }
+            }
+            val raw = p.runTurn(
+                audio = flow,
+                promptSuffix = { heard -> Prompts.turnSuffix(fsm, heard) },
+                grammar = grammar,
+                lang = lang.code,
+                trace = trace,
+                onPartial = { partial = it },
+                onSentence = { s -> tts?.speak(s) }
+            )
+            val parsed = if (raw.isNotBlank()) fsm.ingest(raw, partial) else false
+            TurnLog.finish(trace, partial, raw, p.lastTimings, lang.code, turbo, fsm)
+            withContext(Dispatchers.Main) {
+                if (partial.isNotBlank()) lines += Line("them", partial, "")
+                if (parsed) lines += Line("agent", fsm.lastQuestion, fsm.lastGloss)
+                else lines += Line("agent", "(unparseable)", raw.take(120))
+                lastLatency = trace.firstAudioLatency()
+                lastTimings = p.lastTimings
+                if (fsm.done()) summary = fsm.englishSummary()
+                recording = false
+                status = "selftest done · ${lang.display}"
+            }
+        }
+    }
 
     fun toggleTurbo() {
         turbo = !turbo

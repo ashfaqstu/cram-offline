@@ -37,7 +37,16 @@ enum class Lang(
     EN("en", "en-US", "English", "English");
 
     companion object {
-        /** Order shown in the picker — testing language first. */
-        val pickable = listOf(BN, HI, ES, EN)
+        /**
+         * MEASURED 2026-08-13 on this device, replaying captured Bengali speech
+         * through whisper-cli with the whole utterance and `-l bn`:
+         *   tiny -> " Keep it to soul."
+         *   base -> " ki kottisu"
+         * Neither produces Bengali script. This is the models, not our chunking —
+         * consistent with published 67-110% WER for Whisper on Bengali. So BN
+         * stays selectable and honestly labelled, but HI leads: Llama 3.2 lists
+         * Hindi as supported and Whisper handles it far better.
+         */
+        val pickable = listOf(HI, EN, ES, BN)
     }
 }

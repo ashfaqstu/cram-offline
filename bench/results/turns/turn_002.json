@@ -1,0 +1,50 @@
+{
+  "seq": 2,
+  "lang": "bn",
+  "mode": "turbo",
+  "audio_samples": 0,
+  "audio_seconds": 0,
+  "audio_peak": 0,
+  "transcript": "",
+  "raw_output": "",
+  "timings": {
+    "prefill_ms": 1239.1,
+    "prefill_tok": 23,
+    "prefill_tps": 18.56,
+    "decode_ms": 20688.4,
+    "decode_tok": 160,
+    "decode_tps": 7.73,
+    "n_past": 269
+  },
+  "trace": {
+    "label": "turbo",
+    "first_audio_ms": null,
+    "marks": [
+      {
+        "mark": "capture_start",
+        "ms": 0.311041
+      },
+      {
+        "mark": "end_of_speech",
+        "ms": 147.255989
+      },
+      {
+        "mark": "asr_done",
+        "ms": 147.276718
+      },
+      {
+        "mark": "empty_input",
+        "ms": 147.451718
+      }
+    ]
+  },
+  "question": "",
+  "gloss": "",
+  "turn": 0,
+  "slots": {
+    "departure": null,
+    "ac": null,
+    "price": null
+  },
+  "objective": "Bus ticket"
+}

@@ -1,0 +1,58 @@
+{
+  "seq": 1,
+  "lang": "en",
+  "mode": "turbo",
+  "audio_samples": 92720,
+  "audio_seconds": 5.795,
+  "audio_peak": 0.9460449,
+  "transcript": " Hello, welcome to the ticket calendar. How can I help you today? [BLANK_AUDIO]",
+  "raw_output": "{ \"q\": \"How can I help you today?\" , \"g\": \"BLANK_AUDIO\", \"s\": { \"q\": \"How can I help you today?\", \"g\": \"BLANK_AUDIO\", \"s\": \"Hello, welcome to the ticket calendar. How can I help you today?\" } , \"d\": false }",
+  "timings": {
+    "prefill_ms": 3149.3,
+    "prefill_tok": 63,
+    "prefill_tps": 20,
+    "decode_ms": 12763.6,
+    "decode_tok": 70,
+    "decode_tps": 5.48,
+    "n_past": 217
+  },
+  "trace": {
+    "label": "turbo",
+    "first_audio_ms": 18152.491504,
+    "marks": [
+      {
+        "mark": "capture_start",
+        "ms": 90.535469
+      },
+      {
+        "mark": "end_of_speech",
+        "ms": 14130.551453
+      },
+      {
+        "mark": "asr_done",
+        "ms": 14130.581245
+      },
+      {
+        "mark": "prefill_done",
+        "ms": 29669.251187
+      },
+      {
+        "mark": "first_audio",
+        "ms": 32283.042957
+      },
+      {
+        "mark": "decode_done",
+        "ms": 42433.702432
+      }
+    ]
+  },
+  "question": "How can I help you today?",
+  "gloss": "BLANK_AUDIO",
+  "turn": 1,
+  "slots": {
+    "departure": null,
+    "ac": null,
+    "price": null
+  },
+  "objective": "Bus ticket"
+}

@@ -36,14 +36,31 @@ class Pipeline(private val topo: Topology, var cfg: Config) {
         /** false = NAIVE baseline: all-core, no overlap, KV reset each turn. */
         val turbo: Boolean = true,
         val nCtx: Int = 2048,           // NEVER default this: 131072 ctx OOMs the phone
-        val asrChunkSec: Double = 2.0,
-        val maxTokens: Int = 160
+        /**
+         * Whisper's encoder always runs a 30-second window, so a 2 s chunk is
+         * ~28 s of padding with no cross-chunk context — accuracy suffers badly.
+         * 5 s is the compromise: still overlaps most of a spoken sentence, but
+         * gives the model enough to work with. Measured per-language in
+         * docs/LANGUAGES.md.
+         */
+        val asrChunkSec: Double = 5.0,
+        val maxTokens: Int = 160,
+        /**
+         * Speculative prefill saturates the big cores while ASR holds the little
+         * ones, which starves the UI during capture. Off by default until the
+         * end-to-end win is measured to be worth the jank.
+         */
+        val speculativePrefill: Boolean = false
     )
 
     // Decode optimum measured at 6; prefill at 8. Clamp to what the device has.
     private val decodeThreads = if (cfg.turbo) minOf(6, topo.cores) else topo.cores
     private val prefillThreads = minOf(8, topo.cores)
-    private val asrThreads = if (cfg.turbo) maxOf(2, topo.nLittle) else topo.cores
+    // Leave two LITTLE cores free. Giving ASR all six pinned to 0x3F starves the
+    // UI thread: while capturing, ASR held the whole little cluster and
+    // speculative prefill held both big cores, so Compose had nowhere to render
+    // and the app visibly stuttered exactly when the user was speaking.
+    private val asrThreads = if (cfg.turbo) maxOf(2, topo.nLittle - 2) else topo.cores
 
     private val llmExec = Executors.newSingleThreadExecutor { Thread(it, "ot-llm") }
     private val asrExec = Executors.newSingleThreadExecutor { Thread(it, "ot-asr") }
@@ -116,32 +133,38 @@ class Pipeline(private val topo: Topology, var cfg: Config) {
         // the final prefill or n_past and the KV cache disagree.
         val specJobs = mutableListOf<Job>()
 
-        // ── OVERLAP 1: chunked ASR on the LITTLE cluster during capture ───────
+        // ── CAPTURE ───────────────────────────────────────────────────────────
+        //
+        // MEASURED 2026-08-13: chunked streaming ASR is not viable with Whisper.
+        // Its encoder always processes a 30-second window, so a 5 s chunk is 25 s
+        // of padding with no cross-chunk context. On identical audio:
+        //
+        //   whole utterance : "We have buses to Cox's Bazaar at 8 in the morning,
+        //                      12 noon and 10 at night."
+        //   5 s chunks      : "Gohhtaka!"
+        //
+        // The overlap was buying ~1-2 s of latency and costing the entire
+        // transcript. So we buffer during capture — which is nearly free, the
+        // LITTLE cluster simply stays idle — and transcribe once at end of speech.
+        // The overlap that survives is TTS-vs-decode, which loses nothing.
         trace.mark("capture_start")
-        val asrJob = launch(asrDisp) {
-            audio.collect { chunk ->
-                chunkCount++
-                val piece = Native.asrTranscribe(asr, chunk, lang, asrThreads)
-                android.util.Log.i("otpipe", "chunk $chunkCount (${chunk.size} samples) -> '${piece.take(60)}'")
-                if (piece.isNotBlank()) {
-                    transcript.append(piece)
-                    onPartial(transcript.toString())
-
-                    // ── OVERLAP 2: speculative prefill on the big cluster ─────
-                    if (cfg.turbo) {
-                        val text = transcript.toString()
-                        if (text.length - speculated > 40) {
-                            val delta = text.substring(speculated)
-                            speculated = text.length
-                            specJobs += launch(llmDisp) { Native.llmPrefill(llm, delta) }
-                        }
-                    }
-                }
-            }
+        val buf = ArrayList<FloatArray>()
+        audio.collect { chunk ->
+            chunkCount++
+            buf.add(chunk)
+            TurnLog.addAudio(chunk)
         }
-        asrJob.join()
-        specJobs.joinAll()          // never let a speculative prefill outrun the final one
         trace.mark("end_of_speech")
+
+        val all = FloatArray(buf.sumOf { it.size }).also { out ->
+            var i = 0; for (c in buf) { c.copyInto(out, i); i += c.size }
+        }
+        if (all.isNotEmpty()) {
+            val text = withContext(asrDisp) { Native.asrTranscribe(asr, all, lang, asrThreads) }
+            transcript.append(text)
+            onPartial(text)
+        }
+        specJobs.joinAll()
         trace.mark("asr_done")
 
         val heard = transcript.toString().trim()

@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +25,40 @@ private const val TAG = "otaudio"
  */
 object Audio {
     const val SAMPLE_RATE = 16_000
+
+    /**
+     * Read a 16 kHz mono 16-bit PCM WAV into the float format whisper.cpp wants.
+     *
+     * This exists so the pipeline can be driven from a file instead of the
+     * microphone. Android gives no way to inject audio into the mic, so without
+     * it every regression test needs a human to speak — which is both slow and
+     * unrepeatable. With it, the same utterance can be replayed after every
+     * change and the results compared exactly.
+     */
+    fun readWav(f: java.io.File): FloatArray {
+        val b = f.readBytes()
+        if (b.size < 44) return FloatArray(0)
+        // walk the chunks rather than assuming a 44-byte header
+        var pos = 12
+        var dataOff = -1
+        var dataLen = 0
+        while (pos + 8 <= b.size) {
+            val id = String(b, pos, 4, Charsets.US_ASCII)
+            val sz = (b[pos + 4].toInt() and 0xff) or ((b[pos + 5].toInt() and 0xff) shl 8) or
+                    ((b[pos + 6].toInt() and 0xff) shl 16) or ((b[pos + 7].toInt() and 0xff) shl 24)
+            if (id == "data") { dataOff = pos + 8; dataLen = sz; break }
+            pos += 8 + sz + (sz and 1)
+        }
+        if (dataOff < 0) return FloatArray(0)
+        val n = minOf(dataLen, b.size - dataOff) / 2
+        val out = FloatArray(n)
+        for (i in 0 until n) {
+            val lo = b[dataOff + i * 2].toInt() and 0xff
+            val hi = b[dataOff + i * 2 + 1].toInt()
+            out[i] = ((hi shl 8) or lo).toShort() / 32768f
+        }
+        return out
+    }
 
     /**
      * Emits a chunk roughly every [chunkSec] seconds while recording, plus the
@@ -90,5 +126,13 @@ object Audio {
         }
 
         awaitClose { runCatching { t.interrupt() } }
-    }.flowOn(Dispatchers.IO)
+    }
+        // UNLIMITED is not optional here. Whisper needs ~1 s to transcribe a 2 s
+        // chunk, so the consumer runs behind the microphone from the first chunk.
+        // With callbackFlow's default bounded buffer, trySend starts failing and
+        // audio is silently discarded: holding for 4.5 s yielded only 1.3 s of
+        // captured audio, and the user hears the agent answer a third of what
+        // they said. Buffering costs ~32 KB/s of heap; dropping costs the turn.
+        .buffer(Channel.UNLIMITED)
+        .flowOn(Dispatchers.IO)
 }

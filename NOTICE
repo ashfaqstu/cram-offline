@@ -1,0 +1,37 @@
+OmniTalk Edge
+Copyright 2026 The OmniTalk Edge authors
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+Built with Llama.
+--------------------------------------------------------------------------------
+
+This project uses, but does not redistribute, the following models. All weights
+are downloaded at setup time by scripts/fetch_models.sh.
+
+  Llama 3.2 1B Instruct
+    Copyright Meta Platforms, Inc.
+    Licensed under the Llama 3.2 Community License Agreement.
+    https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/LICENSE
+    GGUF conversion by bartowski.
+
+  Whisper (base, tiny)
+    Copyright OpenAI. MIT License.
+    https://github.com/openai/whisper
+    GGML conversion from the whisper.cpp model repository.
+
+This project links the following open-source software:
+
+  llama.cpp   — MIT License — Copyright the ggml authors
+                https://github.com/ggml-org/llama.cpp
+  whisper.cpp — MIT License — Copyright the ggml authors
+                https://github.com/ggml-org/whisper.cpp
+  ggml        — MIT License — Copyright the ggml authors
+  KleidiAI    — Apache-2.0  — Copyright Arm Limited
+                Arm optimized microkernels, vendored via llama.cpp/ggml.
+
+Text-to-speech is provided by the Android platform TextToSpeech engine; no
+third-party TTS model is bundled or redistributed.

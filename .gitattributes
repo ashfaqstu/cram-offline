@@ -1,0 +1,25 @@
+# Shell scripts MUST be LF. Committed with CRLF from Windows they fail on a
+# judge's Linux/macOS box with "bad interpreter: no such file or directory" —
+# a setup failure that looks like a broken project.
+*.sh        text eol=lf
+*.gbnf      text eol=lf
+Makefile    text eol=lf
+*.py        text eol=lf
+
+# Windows-only helpers stay CRLF
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# Everything else: normalise in the repo, native in the working copy
+*           text=auto
+
+# Never touch these
+*.gguf      binary
+*.bin       binary
+*.png       binary
+*.jpg       binary
+*.gif       binary
+*.mp4       binary
+*.apk       binary
+*.jar       binary

@@ -1,0 +1,36 @@
+# ── model weights: NEVER commit ───────────────────────────────────────────────
+# Llama 3.2 is under the Llama Community License, not Apache-2.0.
+# Weights are fetched by scripts/fetch_models.sh. See NOTICE.
+*.gguf
+*.bin
+!**/gradle/wrapper/gradle-wrapper.jar
+models/
+
+# ── build outputs ─────────────────────────────────────────────────────────────
+build/
+build-android/
+build-android-nokleidi/
+third_party/*/build*/
+.cxx/
+*.so
+*.o
+*.a
+
+# ── android / gradle ──────────────────────────────────────────────────────────
+.gradle/
+local.properties
+*.apk
+*.aab
+*.keystore
+!app/release/*.apk
+
+# ── tooling ───────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.log
+__pycache__/
+*.pyc
+.venv/
+
+# ── keep benchmark outputs, they ARE the submission ───────────────────────────
+!bench/results/**

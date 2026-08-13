@@ -5,6 +5,9 @@ Single source of truth for what is done and what is next.
 
 New here? Read [`HANDOVER.md`](HANDOVER.md) first.
 
+The wider, spec-level tracker — for after the minimal build ships — is
+[`PROGRESS-FULL.md`](PROGRESS-FULL.md). Work from *this* file until then.
+
 ---
 
 ## Right now — do these in order

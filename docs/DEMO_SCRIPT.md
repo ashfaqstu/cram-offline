@@ -1,147 +1,104 @@
-# Demo script — shot by shot
+# Demo script — follow this exactly
 
-A 3:00 video, public on YouTube, recorded on the real phone, no speed-ups.
-Screen-record the phone (MIUI: Control Centre → Screen Recorder, or
-`adb shell screenrecord`).
+Every screen, every number and every button label below was captured on the Poco
+M2 Pro on the build you are about to record. Nothing here is predicted.
 
-Everything below is timed against **measured** behaviour on the Poco M2 Pro. If
-you follow it in order and read the lines as written, it lands at 3:00.
+Video is ≤ 3:00, public on YouTube, recorded on the real phone, no speed-ups.
 
 ---
 
-# Part 1 — Prep. Do all of this before you press record.
+# Part 1 — Prep. Ten minutes, before you press record.
 
-Ten minutes. Skipping any of it costs you a re-shoot.
+### Let the phone cool. This is the one that will bite you.
 
-### The phone
+First word was **9.0 s** on a cool phone and **19.1 s** on a hot one, in the same
+build, on the same question. Screen recording plus a few generations is enough to
+double it, and the number is on screen.
 
-- [ ] **Plug it in and let it cool.** Thermal throttling moves first word from
-      9 s to 15 s, and the timer is on screen.
-- [ ] **Do Not Disturb ON.** A notification banner mid-take costs the whole recording.
-- [ ] **Force-stop Messenger, Gmail, Chrome.** A background app measurably slows
-      prefill. One notified during our testing at 02:27 — don't let it be your take.
-- [ ] **Airplane mode ON**, and confirm the icon is visible in the status bar.
-      It is the claim; it must be legible.
-- [ ] Record **1080p portrait**. Do not crop out the status bar.
+- [ ] Plug in, close everything, leave it **5 minutes** before the take
+- [ ] **Do Not Disturb ON**
+- [ ] **Airplane mode ON** — visible in the status bar, it is the claim
+- [ ] Record **1080p portrait**, status bar in frame
 
-### The app
+### Set the app up
 
-- [ ] Open **Settings**. If you see a red **`modified`** chip, tap
-      **Reset to measured**. The subtitle under "Settings" must read from the
-      measurement, not "Tuned by hand" — a hand-tuned app contradicts the whole
-      self-calibration point you are about to make.
-- [ ] **Pre-generate the flashcards.** Ask the four-conditions question, tap
-      **"Make flashcards from slide 4"**, and let it finish. **This takes about
-      90 seconds** — that is why it is not shot live. The cards are saved with the
-      deck, so they will still be there when you record.
-- [ ] In **Practise**, mark a couple wrong so **"Drill the N I missed"** is
-      showing before you record.
+- [ ] **Settings → if a red `modified` chip is showing, tap "Reset to measured".**
+- [ ] **Regenerate every deck's cards.** Cards are saved to disk, so any deck you
+      made cards on before tonight still holds the old broken ones — I saw
+      "What do roots do?" still sitting on your phone. Open the deck, tap
+      **Make cards**, let it finish.
 - [ ] Force-stop the app so the video opens cold.
 
-### The three-times determinism check — 90 seconds, do not skip
+### Two cutaway images, already made for you
 
-Ask **"what algorithm avoids deadlock"** three times, touching nothing between.
-All three must read character-for-character identical. If any differs, decoding
-has regressed to sampling — check `llama_sampler_init_greedy` is still in
-`native/otjni.cpp`. This is the one bug that would lose it on camera.
+- `bench/results/overlay_kleidiai_log.png`
+- `bench/results/overlay_kleidiai_ab.png`
 
-### Measured timings — so you know what you are waiting for
+Both are 1080×1920, the exact size of your recording. Drop them straight on the
+timeline. Do not rebuild them.
 
-| Question | First word | Answer runs for |
-|---|---|---|
-| What are the four Coffman conditions? | **9.0 s** | ~13 s after that |
-| what algorithm avoids deadlock | **11.9 s** | ~7 s after that |
-| when is assignment 3 due | **7.3 s** | ~2 s after that |
+### Rehearse once, then delete the take
+
+Run the whole thing once end to end. It also warms the deck so the take is clean.
 
 ---
 
-# Part 2 — What actually won last time
-
-From [Arm's announcement](https://newsroom.arm.com/blog/arm-ai-dev-challenge) of
-the first Arm AI Developer Challenge — 142 submissions, six winners, judged on
-technological implementation, UX, potential impact and "wow".
-
-| Place | Project | What it was |
-|---|---|---|
-| 1st | **Chuck'it** | On-device bookmarking — save a thing, find it later, privately |
-| 3rd | **Jackqr** | **Offline study tool: PDFs → text, simplification, flashcards** |
-| 3rd | Epictetus | Android chatbot **using KleidiAI** as a selling point |
-
-Three things that shape every second below.
-
-1. **Our category already placed third.** Being an offline study app is worth
-   about third. *The idea is not the pitch.* Do not spend the opening explaining
-   that studying is hard.
-2. **The winner was graspable in one sentence and one gesture.** Not more
-   features — one loop, shown working.
-3. **The theme changed in our favour.** That was the *Developer* Challenge; this
-   is the ***Optimization*** Challenge. Jackqr's feature list scores the same
-   today. Our measurement does not — and a third-place project last year sold
-   KleidiAI as a feature that we have measured doing nothing.
-
-**Lead with the number. The finding is the twist.** Open on 34.5 s → 11 s, and let
-KleidiAI arrive thirty seconds later as the reason to believe it. Opening on the
-negation invites "you measured, you didn't optimize."
-
----
-
-# Part 3 — The shot list
+# Part 2 — The shot list
 
 | Time | On screen | Beat |
 |---|---|---|
-| 0:00–0:14 | Phone in hand, airplane mode | The hardware, and the question |
-| 0:14–0:36 | Answer generating, then complete | Evidence first, four conditions, cited |
-| 0:36–0:52 | Answer still visible | **The number** — 34.5 s → 11 s |
-| 0:52–1:28 | Settings top, then overlays | **The twist** — KleidiAI does nothing |
-| 1:28–2:05 | Settings thread cards | Where the speed came from |
-| 2:05–2:42 | Study → Practise | The loop: answer → cards → drill |
+| 0:00–0:12 | Phone in hand, airplane mode | The hardware |
+| 0:12–0:34 | Ask → cited answer | Evidence at 6 ms, answer at ~9 s |
+| 0:34–0:50 | Answer still up | **The number** — 34.5 s → 9 s |
+| 0:50–1:26 | Settings, then the two overlays | **The twist** — KleidiAI does nothing |
+| 1:26–2:00 | Settings thread cards | Where the speed came from |
+| 2:00–2:42 | Study → Practise | The loop |
 | 2:42–3:00 | Settings privacy card | Close |
 
 ---
 
-## 0:00–0:14 — Open on the phone, not on slides
+## 0:00–0:12 — Open on the phone
 
-**Do:** hold the phone up, airplane mode visible. Open Cram cold. Tap
-**Try a sample deck**, then the **Ask** tab, then the suggested question
+**Do:** hold the phone, airplane mode visible. Open Cram cold → tap
+**Try a sample deck** → tap the **Ask** tab → tap the suggested question
 **"What are the four Coffman conditions?"**
 
 **Say:**
 
 > "This is a Poco M2 Pro from 2020. Two fast cores, six slow ones, no NPU, no
-> i8mm — and it's in airplane mode.
->
-> It's exam week, these are my lecture slides, and I have a question."
+> i8mm — and it's in airplane mode. These are my lecture slides, and I have a
+> question."
 
----
+## 0:12–0:34 — The answer
 
-## 0:14–0:36 — The answer, and let the wait show
+**What appears, in this order:** a `FOUND IN YOUR SLIDES  6 ms` strip, then the
+**slide 4** card with the original text, then `ANSWER`, then the answer streaming
+in at about nine seconds.
 
-**Do:** nothing. Do not cut. The evidence card appears almost immediately; the
-answer streams in after about nine seconds.
+**The answer is one sentence.** Verified, character for character:
 
-**Say** — as the evidence card appears (about 1 second in):
+> The four Coffman conditions are mutual exclusion, hold and wait, no preemption,
+> and circular wait.
 
-> "The matching slide comes back in eight milliseconds. That's not the model —
+Under it: `evidence 6 ms` and `first word 9.0s`.
+
+**Say** — as the evidence strip appears:
+
+> "The matching slide comes back in six milliseconds. That's not the model —
 > that's BM25 ranking every passage in the deck. The model is only there to
 > phrase it."
 
-**Say** — while the answer is writing:
+**Say** — once the answer completes:
 
-> "Nine seconds to the first word, on a six-year-old phone, with no signal."
-
-**Say** — once all four conditions are on screen:
-
-> "All four, complete, and it tells me they came from slide four. I can check its
+> "All four conditions, and it tells me they came from slide four. I can check its
 > work — it can't make something up without showing me where it didn't come from."
 
-> ⚠️ **Do not cut this wait.** An honest nine seconds is more credible than a jump
-> cut, and the on-screen `first word` timer makes any edit obvious anyway.
+> ⚠️ **Do not cut the wait.** The `first word` timer is on screen; any edit is
+> visible. Nine honest seconds on a 2020 phone is the point.
 
----
+## 0:34–0:50 — The number
 
-## 0:36–0:52 — The number
-
-**Do:** point at the `first word 9.0s` chip, still on screen.
+**Do:** point at the `first word 9.0s` chip.
 
 **Say:**
 
@@ -151,112 +108,122 @@ answer streams in after about nine seconds.
 >
 > Here's where that came from. It is not where Arm tells you to look."
 
-That last line is the hinge of the video. Say it, pause, then cut to Settings.
+Pause. Cut to Settings.
 
----
+## 0:50–1:26 — The twist
 
-## 0:52–1:28 — The twist: KleidiAI is inert here
+**Do:** tap **Settings**. The top card reads
+`MEASURED ON FIRST RUN` — `PREFILL 18 t/s` · `CORES 2 + 6` · `I8MM no`.
+Hold on it, then scroll to the bottom card, **ABOUT THIS PHONE**, which reads:
 
-**Do:** tap **Settings**. Hold on the top card — `PREFILL 18 t/s`, `CORES 2 + 6`,
-`I8MM no`. Then scroll to the bottom, to **ABOUT THIS PHONE**.
+> "2 fast cores + 6 efficient cores at 2323 MHz. Arm's KleidiAI is inert on this
+> CPU: its int4 kernels require i8mm or SME, and this processor has neither. We
+> measured no difference with it switched on or off, so the speed here comes from
+> how the app is built, not from the library."
 
-**Say** — on the top card:
+**Say:**
 
 > "The app measured this phone on first run. Eighteen tokens a second, two fast
-> cores and six slow ones, and no i8mm."
+> cores, six slow ones — and no i8mm.
+>
+> Arm markets KleidiAI as CPU acceleration for on-device AI. On this chip it does
+> nothing at all, and the app says so about your own phone."
 
-**Say** — on the ABOUT THIS PHONE card:
-
-> "Arm markets KleidiAI as CPU acceleration for on-device AI. On this chip it does
-> nothing at all — and the app says so, about your own phone."
-
-**Do:** cut to a full-screen overlay of the log line:
-
-```
-kleidiai: no compatible q4 kernels found for CPU features mask 1
-kleidiai: SME disabled
-```
+**Do:** cut to **`overlay_kleidiai_log.png`**, full screen, ~7 seconds.
 
 **Say:**
 
-> "Its int4 kernels need i8mm or SME. Armv8.2-A has neither, so GGML silently
-> falls back. And we didn't just read the log — we built the same binary twice,
-> with the library on and off."
+> "Its int4 kernels need i8mm or SME. This CPU has neither, so GGML falls back —
+> silently, for a hundred and sixty-three tensors."
 
-**Do:** cut to a full-screen overlay of the A/B table.
-
-| Q4_0 weights | prefill tok/s | decode tok/s |
-|---|---:|---:|
-| KleidiAI **ON** | 18.75 | 8.82 |
-| KleidiAI **OFF** | 17.48 | 9.17 |
+**Do:** cut to **`overlay_kleidiai_ab.png`**, full screen, ~7 seconds.
 
 **Say:**
 
-> "Seven percent apart, and decode is *faster* with it switched off. That's noise,
-> not acceleration. And that cliff runs straight through the mid-range install
-> base."
+> "And we didn't just read the log. We built the same binary twice, with the
+> library on and off. Seven percent apart, and decode is *faster* with it switched
+> off. That's noise, not acceleration — and that cliff runs straight through the
+> mid-range install base."
 
----
+## 1:26–2:00 — Where the speed came from
 
-## 1:28–2:05 — Where the speed actually came from
-
-**Do:** back to Settings. Scroll so both thread cards are visible:
-**Threads for writing the answer — 6 of 8 cores** and
-**Threads for reading the slides — 8 of 8 cores**.
+**Do:** back to Settings. Scroll so both thread cards are in frame:
+**Threads for writing the answer — `6 of 8 cores`** and
+**Threads for reading the slides — `8 of 8 cores`**.
 
 **Say:**
 
 > "So we measured what does work. Using all eight cores makes writing fifty-eight
 > percent *slower* than six — every layer ends in a barrier, so the two fast cores
-> sit waiting on the six slow ones. Reading the slides scales to eight; writing
-> the answer peaks at six. So the app runs both, and it takes those numbers from
-> the phone's own core split."
+> wait on the six slow ones. Reading the slides scales to eight; writing peaks at
+> six. The app runs both, and takes those numbers from the phone's own core split."
 
-**Do:** scroll up to **HOW MUCH OF THE SLIDE IT READS** — Brief ~14s / Balanced
-~19s / Thorough ~27s.
+**Do:** scroll up to **HOW MUCH OF THE SLIDE IT READS** — `Brief ~14s`,
+`Balanced ~19s`, `Thorough ~27s`.
 
 **Say:**
 
-> "And prefill here is only about twice decode — not the fifty times you get on a
-> GPU. That inverts the usual trade-off: context is expensive and retrieval is
-> nearly free. So the app ranks the whole deck in milliseconds and sends almost
-> none of it. That is what took first word from thirty-four seconds to nine.
+> "Prefill here is only about twice decode — not the fifty times a GPU gives you.
+> Context is expensive and retrieval is nearly free, so the app ranks the whole
+> deck in milliseconds and sends almost none of it. That's what took first word
+> from thirty-four seconds to nine.
 >
-> None of it is hard-coded. It times a real prefill on *your* phone at startup and
-> sizes itself to it — and it shows you what each choice costs in seconds."
+> And none of it is hard-coded. It times a real prefill on *your* phone at startup,
+> and shows you what every choice costs in seconds."
 
----
+## 2:00–2:42 — The loop
 
-## 2:05–2:42 — The loop, in one motion
+**Do:** **Ask** tab → scroll to the answer → tap **"Make flashcards from slide 4"**.
 
-**Do:** back to **Ask**, scroll to the answer, tap
-**"Make flashcards from slide 4"** directly under it. Let the Study tab open and
-begin generating — then **cut**, with this caption burned on screen:
-
-> `90 seconds later — not sped up, cut for length`
-
-Land on the finished cards.
+Study opens with scope already set: **Slides**, `From 4`, `To 4`, `of 11`, and the
+button turns into **`Writing`** with a spinner.
 
 **Say:**
 
-> "The question I just asked becomes the thing I revise. Ninety seconds of the
-> phone's time, and they're saved with the deck, not thrown away when I close it."
+> "The question I just asked becomes the thing I revise."
 
-**Do:** reveal one card — show the **from slide 4** chip. Then tap **Practise**,
-mark one wrong, finish, and land on **"Drill the N I missed"**.
+**Do:** **cut here**, with this caption burned on screen:
+
+> `100 seconds later — not sped up, cut for length`
+
+Land on the finished list: **`5 CARDS FROM SLIDE 4`**. Verified, in this order:
+
+1. What are the four Coffman conditions?
+2. What is the purpose of mutual exclusion?
+3. What is the purpose of hold and wait?
+4. What is the purpose of no preemption?
+5. What is the purpose of circular wait?
 
 **Say:**
 
-> "Every card knows which slide it came from. Get one wrong and it drills only
-> those. And it tells me what I still haven't opened — because the real question
-> at one in the morning isn't 'what is a deadlock', it's 'what have I not looked
-> at yet'."
+> "A hundred seconds of the phone's time, five cards, all from slide four — and
+> they're saved with the deck, not thrown away when I close it."
 
----
+**Do:** tap **Practise**. You get `1 of 5`, a progress bar, and **Show answer**.
+Tap **Show answer** — the back appears with a yellow **`from slide 4`** chip, and
+two buttons: **Review again** and **Got it**.
+
+Tap **Review again** on this first card, then **Show answer → Got it** on the
+remaining four.
+
+> Do not linger on card one's back — it gives one condition, not all four. Tap
+> through it. Card two onward read cleanly.
+
+You land back on the list showing **`4 known · 1 to drill`** and a blue
+**"Drill the 1 I missed"**.
+
+**Say:**
+
+> "Every card knows which slide it came from. Get one wrong, and it drills only
+> that one — because the real question at one in the morning isn't 'what is a
+> deadlock', it's 'what have I still not got'."
 
 ## 2:42–3:00 — Close
 
-**Do:** Settings, bottom, the **PRIVACY** card.
+**Do:** Settings, bottom, the **PRIVACY** card:
+
+> "This app has no internet permission and no storage permission. It cannot send
+> your documents anywhere, even by mistake."
 
 **Say:**
 
@@ -268,24 +235,29 @@ mark one wrong, finish, and land on **"Drill the N I missed"**.
 
 ---
 
-# Part 4 — After the shoot
+# Part 3 — After the shoot
 
 ## Do not say
 
-- ❌ "KleidiAI is broken" — it is inert *on this hardware*, and correct on i8mm/SME
+- ❌ "KleidiAI is broken" — it is inert *on this hardware*, correct on i8mm/SME
 - ❌ "accelerated by i8mm / SME2 / the NPU" — this chip has none of them
-- ❌ any latency figure not visible on screen at that moment
-- ❌ "the first app to do this" — Jackqr placed third doing something adjacent, and
-  a judge who knows that stops trusting the rest of the video
+- ❌ any latency figure not on screen at that moment
+- ❌ "the first app to do this" — Jackqr placed third doing something adjacent
+
+## Why this order wins
+
+The first Arm AI Developer Challenge had 142 entries and six winners. **Jackqr —
+an offline study app with flashcards — took third.** Being a study app is worth
+about third place, so the idea is not the pitch. This is the ***Optimization***
+Challenge, and a third-place entry last year sold *using* KleidiAI as a feature.
+Leading with 34.5 s → 9 s and landing KleidiAI at 0:50 is the whole argument, and
+a judge who stops at one minute has already seen it.
 
 ## Title, thumbnail, description
 
-The judge sees these before a single frame. Number first, finding second.
-
 - **Title:** `Cram — 3× faster on a 2020 phone. None of it came from Arm's KleidiAI.`
-- **Thumbnail:** phone in hand, airplane mode visible, two lines of text —
-  **"34.5s → 9s"** large, **"KleidiAI: 0%"** underneath, the cited answer behind it.
-- **Description:** first two lines matter, the rest is below the fold.
+- **Thumbnail:** phone in hand, airplane mode visible, **"34.5s → 9s"** large and
+  **"KleidiAI: 0%"** under it.
 
 ```
 Offline RAG over lecture slides on a Snapdragon 720G — Armv8.2-A, no i8mm, no SME, no NPU.
@@ -296,12 +268,10 @@ APK: https://github.com/ashfaqstu/cram-offline/releases/latest
 Built with Llama.
 ```
 
-Not "Cram: an offline study app". That title is Jackqr's, and it came third.
-
 ## Upload checklist
 
-- [ ] **Public**, not unlisted — an unlisted link fails eligibility
+- [ ] **Public**, not unlisted — unlisted fails eligibility
 - [ ] Under 3:00
-- [ ] `evidence 8 ms` and `first word 9.0s` legible at 1080p
+- [ ] `evidence 6 ms` and `first word` legible at 1080p
 - [ ] Airplane mode visible during the ask
 - [ ] URL pasted into Devpost

@@ -131,7 +131,17 @@ class RagEngine {
         // per character that was several seconds of re-reading the same
         // instructions before every answer. Prefill it once, then rewind the
         // cache to just that prefix and send only what changed.
-        val cached = if (systemTokens > 0) Native.llmRewindKv(llm, systemTokens) else 0
+        // -1, NOT 0, WHEN THERE IS NO PREFIX.
+        //
+        // dropPrefix() sets systemTokens = 0 after any study or topic pass, which
+        // is how those tell us the cache now holds something else. With 0 as the
+        // sentinel, cached == systemTokens == 0, the guard below did not fire, and
+        // the question was prefilled straight on top of the flashcard prompt with
+        // the system turn never re-sent — buildUserTurn strips it. Ask a question,
+        // make cards, ask again, and the second answer was written in the context
+        // of generating flashcards. A sentinel has to be a value the thing it
+        // guards can never legitimately take.
+        val cached = if (systemTokens > 0) Native.llmRewindKv(llm, systemTokens) else -1
         if (cached != systemTokens) {
             Native.llmResetKv(llm)
             systemTokens = Native.llmPrefill(llm, SYSTEM_PROMPT)

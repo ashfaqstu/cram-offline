@@ -2,6 +2,8 @@
 
 **Ask your lecture slides a question and get an answer with the slide number, offline, on a 2020 budget phone.**
 
+**3× faster to first word than our first working build — and none of it came from Arm's own KleidiAI, which we measured doing nothing at all on this CPU.**
+
 Open a PDF of a lecture. Ask it anything. Cram finds the passage that answers you, shows you which slide it came from, and writes the answer from that passage — no network, no account, no upload. Then it turns the same slides into flashcards you can revise from.
 
 Built and measured on a **Poco M2 Pro** — Snapdragon 720G, 2× Cortex-A76 + 6× Cortex-A55, **Armv8.2-A with no i8mm, no SVE, no SME, no NPU path**, 6 GB RAM. Not a flagship. The phone most of the world is actually holding.
@@ -13,7 +15,30 @@ Built and measured on a **Poco M2 Pro** — Snapdragon 720G, 2× Cortex-A76 + 6�
 
 ---
 
+## What we optimized, and by how much
+
+**Time to first word: 34.5 s → ~11 s. Three times faster on hardware we did not change** — same phone, same model, same weights. Every line below was measured on the device, not estimated.
+
+| Change | Measured effect | Where you can check it |
+|---|---|---|
+| **Retrieve many, send few** — BM25 ranks the whole deck, only 1–2 passages are ever sent | the bulk of **34.5 s → ~11 s** | `first word` timer, on screen |
+| **Split prefill/decode thread counts** (8 and 6) | avoids a **58%** decode collapse | [`sweep_POCO_M2_Pro.csv`](bench/results/sweep_POCO_M2_Pro.csv) |
+| **Q4_0 + GGML aarch64 repack** instead of Q4_K_M | **+15%** prefill (18.1 vs 15.7 tok/s) | [`sweep_POCO_M2_Pro.csv`](bench/results/sweep_POCO_M2_Pro.csv) |
+| **KV prefix cache** for the system prompt | 14.8 s → 12.6 s (**~15%**) | `first word` timer, on screen |
+| **Greedy budget allocation** | stopped truncating the winning passage | answer correctness |
+| **Startup device calibration** | prompt budget sized to *your* phone, not ours | Settings screen |
+| **Greedy decoding** | identical answer to an identical question | ask it three times |
+| ~~KleidiAI~~ | **0%** — it does not engage on this CPU | same-binary A/B, below |
+
+> The first-word figures come from different sessions on the same phone, so they do not add up into a clean waterfall — thermal state moves them a second or two either way. The end-to-end **34.5 s → ~11 s** is the number the app prints on its own screen, and `docs/REPRODUCE.md` is how you check the rest.
+
+And the last row is the one worth the rest of this page.
+
+---
+
 ## The finding we'd tell every Arm developer
+
+**None of that speedup came from where Arm tells you to look.**
 
 Arm markets **KleidiAI** as CPU acceleration for on-device AI. On this device it does nothing at all — and it says so in a log line nobody reads:
 

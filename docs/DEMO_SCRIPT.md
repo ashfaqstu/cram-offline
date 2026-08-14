@@ -28,6 +28,11 @@ broken before.
 two of the four conditions — a confident, wrong, well-formatted answer. If any condition
 is missing or invented, stop and check the character budget in Settings before recording.
 
+**Ask the same question three times before you record.** All three must come back
+character-for-character identical. If they don't, decoding has regressed to sampling —
+check `llama_sampler_init_greedy` is still in `native/otjni.cpp`. Ninety seconds of
+insurance against the one bug that would lose this on camera.
+
 If a deck has no real slide headings, the Topic picker offers a one-time LLM pass to
 generate them. That takes a minute or two; do it **before** recording, not during.
 
@@ -75,70 +80,63 @@ not a feature. That is a finding, and no app-shaped submission can manufacture o
 
 ## The shape
 
-**Lead with the finding, not the app.** Every entry shows an app. Almost none shows a
-measurement that contradicts the platform vendor's own marketing on the vendor's own
-hardware.
+**Lead with the number. The finding is the twist, not the headline.**
+
+This is an *optimization* challenge, so the thing being judged is that we made something
+measurably faster: **34.5 s → 11 s, 3×, on unchanged hardware.** Open on that. KleidiAI
+comes second, thirty seconds later, as the reason to believe the first number — because
+a team that discovered its vendor's accelerator was inert is obviously a team that
+measured rather than guessed.
+
+Opening on the negation instead invites the reading *"you measured, you didn't
+optimize."* Same footage, same facts, same order of shots — the first sentence just has
+to be a positive number.
 
 | Time | Beat |
 |---|---|
-| 0:00–0:20 | The problem, on the real phone |
-| 0:20–1:00 | It works — ask a question, get a cited answer |
-| 1:00–1:30 | Flashcards from the same slides |
-| 1:30–2:30 | **The finding** — KleidiAI is inert here, and what we did instead |
-| 2:30–3:00 | Privacy, and close |
+| 0:00–0:20 | Hook — ask a question, get a cited answer. No explanation |
+| 0:20–0:45 | **The number** — 34.5 s → 11 s, 3×, same phone |
+| 0:45–1:20 | **The twist** — none of it came from KleidiAI. Log line, then the A/B |
+| 1:20–2:05 | Where it *did* come from — the thread cliff, prefill ≈ 2× decode |
+| 2:05–2:35 | The loop — cited answer → flashcards → drill, one unbroken take |
+| 2:35–3:00 | Sizes itself to your phone · privacy · close |
 
 ## 0:00–0:20 — Open on the phone, not on slides
 
 Hold up the phone. Airplane mode visible in the status bar.
 
-> "This is a Poco M2 Pro from 2020. Two fast cores, six slow ones, no NPU, no i8mm.
-> It's the phone most students actually own — and it's in airplane mode."
+> "This is a Poco M2 Pro from 2020. Two fast cores, six slow ones, no NPU, no i8mm —
+> and it's in airplane mode."
 
-Open Cram. The sample deck is already there.
-
-> "It's exam week. These are my lecture slides, and I have a question."
-
-**Do not explain the architecture yet.** Show it working first.
-
-## 0:20–1:00 — Ask, and show the evidence
-
-Tap *"What are the four Coffman conditions?"*
-
-The moment to point at is **the evidence appearing first**:
+Open Cram, tap *"What are the four Coffman conditions?"*. The moment to point at is
+**the evidence appearing first**:
 
 > "The matching slide comes back in five milliseconds. That's not the model — that's
-> BM25 ranking every passage in the deck. The model is only there to phrase it."
+> BM25 ranking every passage in the deck."
 
 Then the answer completes.
 
-> "Four conditions, all correct, and it tells me they came from slide four. I can check
-> its work. It cannot make something up without showing me where it didn't come from."
+> "Four conditions, all correct, and it tells me they came from slide four."
+
+**Do not explain the architecture yet.** Show it working, then earn the explanation.
 
 **Let the wait be visible.** Do not cut it. An honest eleven seconds on a six-year-old
 phone is more credible than a suspicious jump cut, and the on-screen `first word` timer
 makes any edit obvious anyway.
 
-## 1:00–1:30 — The loop, in one unbroken take
+## 0:20–0:45 — The number
 
-**Do not cut during this.** It is the Chuck'it lesson: one gesture, one loop, obviously
-useful. Tap **"Make flashcards from slide 6"** directly under the answer.
+Point at the `first word` line still on screen.
 
-> "The question I just asked becomes the thing I revise."
+> "Eleven seconds. The first time this worked end to end, it was **thirty-four and a
+> half** — same phone, same model, same weights. Three times faster on hardware I
+> didn't change.
+>
+> Here's where that came from. It is not where Arm tells you to look."
 
-Cards appear. Reveal one — show the `from slide 6` chip.
+That last line is the hinge of the whole video. Say it, then cut to Settings.
 
-> "Every card knows which slide it came from. And when I get one wrong—"
-
-Tap **Practise**, mark one wrong, finish, and land on **"Drill the 3 I missed"**.
-
-> "—it remembers, and drills only those. Close the app, come back: still there."
-
-Then the coverage strip on Ask:
-
-> "And it tells me what I haven't looked at yet. That's the actual question at 1 a.m. —
-> not 'what is a deadlock', but 'what have I still not opened'."
-
-## 1:30–2:30 — The finding
+## 0:45–1:20 — The twist
 
 Open **Settings**. Point at the *Measured on first run* card.
 
@@ -159,22 +157,39 @@ Show the A/B table: 18.75 vs 17.48 prefill, 8.82 vs 9.17 decode.
 > "Seven percent apart, and decode is *faster* with it switched off. That's noise, not
 > acceleration. That cliff runs straight through the mid-tier install base."
 
-Then the payoff — where the speed did come from:
+## 1:20–2:05 — Where the speed actually came from
 
 > "So we measured what does work. Eight threads makes decode fifty-eight percent
 > *slower* than six, because the fast cores wait on the slow ones at every layer
-> barrier. Prefill wants eight, decode wants six, so we run both.
+> barrier. Prefill wants eight, decode wants six — so we run both.
 >
-> And prefill here is only twice decode — not the fifty times you get on a GPU. So
-> the app retrieves from the whole deck and sends almost none of it. That's what took
-> first word from thirty-four seconds to eleven."
+> And prefill here is only twice decode, not the fifty times you get on a GPU. That
+> inverts the usual trade-off: context is expensive and retrieval is nearly free. So
+> the app ranks the whole deck in milliseconds and sends almost none of it.
+>
+> That's the three times."
 
 Show the Brief / Balanced / Thorough presets.
 
-> "And it doesn't hard-code any of that. It times a real prefill on *your* phone at
-> startup and sizes itself to it."
+> "And none of it is hard-coded. It times a real prefill on *your* phone at startup and
+> sizes itself to it."
 
-## 2:30–3:00 — Close
+## 2:05–2:35 — The loop, in one unbroken take
+
+**Do not cut during this.** It is the Chuck'it lesson: one gesture, one loop, obviously
+useful. Scroll back to the answer and tap **"Make flashcards from slide 4"** directly
+under it.
+
+> "And the question I just asked becomes the thing I revise."
+
+Cards appear. Reveal one — show the `from slide 4` chip. Tap **Practise**, mark one
+wrong, finish, and land on **"Drill the 3 I missed"**.
+
+> "Every card knows which slide it came from. Get one wrong and it drills only those —
+> close the app, come back, still there. That's the actual question at 1 a.m.: not
+> 'what is a deadlock', but 'what have I still not opened'."
+
+## 2:35–3:00 — Close
 
 > "No internet permission. No storage permission. Not a promise in a privacy policy —
 > the app is structurally incapable of sending your notes anywhere.
@@ -205,10 +220,12 @@ Show the Brief / Balanced / Thorough presets.
 
 ## The thumbnail and title
 
-The judge sees these before a single frame. Put the finding in both.
+The judge sees these before a single frame. Put the result in both — the number first,
+the finding as the hook that follows it.
 
-- **Title:** `Cram — I measured Arm's KleidiAI on a 2020 phone. It does nothing.`
-- **Thumbnail:** the phone in hand, airplane mode visible, one line of text:
-  **"KleidiAI: 0% faster"** — with the app's answer on screen behind it.
+- **Title:** `Cram — 3× faster on a 2020 phone. None of it came from Arm's KleidiAI.`
+- **Thumbnail:** the phone in hand, airplane mode visible, two lines of text:
+  **"34.5s → 11s"** large, and **"KleidiAI: 0%"** underneath — with the app's cited
+  answer on screen behind it.
 
 Not "Cram: an offline study app". That title is Jackqr's, and it came third.

@@ -6,7 +6,7 @@ package dev.omnitalk
  * THREADING CONTRACT — every LLM call must be made from the same thread that
  * called [setAffinity] and then [llmLoad]; likewise for ASR. GGML worker threads
  * inherit the creating thread's affinity mask, and the pool is built at load
- * time, so pinning after the fact does nothing. Pipeline.kt enforces this with
+ * time, so pinning after the fact does nothing. RagEngine.kt enforces this with
  * one single-thread dispatcher per model. Do not call these from arbitrary
  * coroutines.
  */
@@ -38,13 +38,6 @@ object Native {
     external fun llmTimings(h: Long): String
     external fun llmFree(h: Long)
 
-    // ── ASR ──────────────────────────────────────────────────────────────────
-    external fun asrLoad(path: String): Long
-
-    /** @param pcm 16 kHz mono float32 in [-1,1]. Any other rate yields confident nonsense. */
-    external fun asrTranscribe(h: Long, pcm: FloatArray, lang: String, nThreads: Int): String
-    external fun asrFree(h: Long)
-
     interface TokenCb { fun onToken(piece: String) }
 }
 
@@ -61,7 +54,7 @@ data class Topology(
     val sve: Boolean,
     val sme: Boolean
 ) {
-    /** True when KleidiAI's int4/int8 microkernels can actually load. See docs/OPTIMIZATION.md O1. */
+    /** True when KleidiAI's int4/int8 microkernels can actually load. See docs/REPRODUCE.md. */
     val kleidiCapable: Boolean get() = i8mm || sme
 
     fun describe() = buildString {

@@ -1,5 +1,0 @@
-model,threads,affinity,total_ms,rtf
-ggml-tiny-q5_1.bin,4,0x3f,6422.77,0.584
-ggml-tiny-q5_1.bin,6,0x3f,5046.11,0.459
-ggml-base-q5_1.bin,4,0x3f,13512.43,1.228
-ggml-base-q5_1.bin,6,0x3f,10066.62,0.915

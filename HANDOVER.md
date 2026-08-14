@@ -12,13 +12,12 @@ here requires an AI assistant.
 
 ## 1. What this is, in one paragraph
 
-An Android app that runs a **goal-directed conversation** entirely offline on a
-mid-range Arm phone. You give it an objective — *"find out when the bus leaves,
-whether it has AC, and the price"* — and it asks a local person questions in their
-language, extracts the facts, tracks what is still missing in a state machine, and
-produces an English summary. Speech recognition is **whisper.cpp**, the language
-model is **llama.cpp with Llama 3.2 1B Q4_0**, both on the CPU. No network — the app
-has no `INTERNET` permission at all.
+An Android app that answers questions about your **lecture slides**, entirely offline
+on a mid-range Arm phone. Open a PDF, ask it anything, and it finds the passage that
+answers you and cites the slide it came from. It also turns those slides into
+flashcards. The language
+model is **llama.cpp with Llama 3.2 1B Q4_0** on the CPU, and retrieval is BM25.
+No network — the app has no `INTERNET` permission at all.
 
 The submission's headline is a **measured finding**: Arm's KleidiAI does nothing on
 Armv8.2-A phones because its int4/int8 kernels need i8mm or SME, which this class of
@@ -114,7 +113,7 @@ Full detail in `PROGRESS.md`. Short version:
    irreversible deadline
 2. Re-run the benchmark sweep on the Narzo → a second, cross-vendor column
 3. Measure **TURBO vs NAIVE** end-to-end latency (needs a person speaking)
-4. `docs/OPTIMIZATION.md`, `BENCHMARKS.md`, `LANGUAGES.md`, `REPRODUCE.md`
+4. `docs/REPRODUCE.md` — how anyone reproduces the KleidiAI A/B
 5. Video, ≤ 3 minutes
 6. Devpost text
 
@@ -132,11 +131,6 @@ All of these were hit for real. Full list with exact error text in
   *Install via USB*.
 - **`LLVM ERROR: IO failure ... No space left on device`** — not an NDK bug, a full
   disk. The default llama.cpp build produces 520 targets and 8 GB of build tree.
-- **Bengali does not work.** Measured on device: whisper-tiny returns
-  `"Keep it to soul."` and base returns `"ki kottisu"` for clear Bengali speech.
-  This is the models, not our code. English is near-perfect; Hindi is the demo
-  candidate. Do not spend time trying to fix Bengali.
-
 ---
 
 ## 7. Layout
@@ -159,11 +153,11 @@ bench/
   analyze.py           CSV -> charts + tables
   results/             committed measurements — these ARE the submission
 android/               the app
-native/otjni.cpp       single JNI layer over llama.cpp + whisper.cpp
-third_party/           llama.cpp, whisper.cpp (submodules), kleidiai (vendored)
+native/otjni.cpp       single JNI layer over llama.cpp
+third_party/           llama.cpp (submodule), kleidiai (vendored)
 ```
 
-**Read the comments in `native/otjni.cpp` and `android/.../Pipeline.kt` before
+**Read the comments in `native/otjni.cpp` and `android/.../rag/RagEngine.kt` before
 changing them.** Both carry the reasoning for decisions that look wrong until you
 know why — for example the LLM is deliberately *not* pinned to the big cores, and
 `llama_sampler_accept` must *not* be called after `llama_sampler_sample`.

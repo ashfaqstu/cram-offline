@@ -41,15 +41,12 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 # runtime CPU detection instead.
 
 add_subdirectory(${TP}/llama.cpp   ${CMAKE_BINARY_DIR}/llama   EXCLUDE_FROM_ALL)
-add_subdirectory(${TP}/whisper.cpp ${CMAKE_BINARY_DIR}/whisper EXCLUDE_FROM_ALL)
 
 add_library(otjni SHARED otjni.cpp)
 
 target_include_directories(otjni PRIVATE
     ${TP}/llama.cpp/include
     ${TP}/llama.cpp/ggml/include
-    ${TP}/whisper.cpp/include
-    ${TP}/whisper.cpp/ggml/include
 )
 
-target_link_libraries(otjni PRIVATE llama whisper log android)
+target_link_libraries(otjni PRIVATE llama log android)

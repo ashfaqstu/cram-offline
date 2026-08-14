@@ -9,7 +9,6 @@
 # Sweeps
 #   A  thread count x CPU affinity        -> O2  the big.LITTLE thread cliff
 #   B  Q4_0 vs Q4_K_M, KleidiAI ON vs OFF -> O1  the KleidiAI cliff (null result)
-#   C  whisper tiny vs base RTF on LITTLE -> ASR model choice
 $ErrorActionPreference = 'Continue'
 $ADB  = 'D:\Android\Sdk\platform-tools\adb.exe'
 $DEV  = '/data/local/tmp/ot'
@@ -58,20 +57,7 @@ foreach ($q in @('Q4_0','Q4_K_M')) {
   }
 }
 
-Write-Output "`n=== SWEEP C: whisper RTF on LITTLE (jfk.wav = 11.0 s of audio) ==="
-"model,threads,affinity,total_ms,rtf" | Set-Content "$OUT\whisper_rtf.csv" -Encoding ascii
-foreach ($m in @('ggml-tiny-q5_1.bin','ggml-base-q5_1.bin')) {
-  foreach ($t in @(4,6)) {
-    $o = Sh "cd $DEV && taskset 3f ./whisper-cli -m $m -f jfk.wav -t $t -l en 2>&1 | grep 'total time'"
-    if ("$o" -match 'total time\s*=\s*([\d.]+)') {
-      $ms = [double]$Matches[1]; $rtf = [math]::Round($ms/11000.0, 3)
-      "$m,$t,0x3f,$ms,$rtf" | Add-Content "$OUT\whisper_rtf.csv" -Encoding ascii
-      "  {0,-22} t={1}  {2,9} ms  RTF={3}" -f $m, $t, $ms, $rtf | Write-Output
-    } else { "  {0} t={1} -> no timing parsed: $o" -f $m, $t | Write-Output }
-    Start-Sleep -Seconds $COOL
-  }
-}
 
-Sh "pkill -f llama- ; pkill -f whisper-" | Out-Null
+Sh "pkill -f llama-" | Out-Null
 Write-Output "`n=== done -> $CSV ==="
 Get-Content $CSV

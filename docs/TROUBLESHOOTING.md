@@ -170,19 +170,6 @@ microphone captured nothing.
 
 ## Model / quality
 
-### Transcript is garbage but the audio sounds fine
-
-Whisper's encoder always processes a **30-second window**, so short chunks are mostly
-padding with no cross-chunk context. On identical audio:
-
-| | |
-|---|---|
-| whole utterance | *"We have buses to Cox's Bazaar at 8 in the morning, 12 noon and 10 at night."* |
-| 5 s chunks | `"Gohhtaka!"` |
-
-The pipeline now buffers during capture and transcribes once at end of speech. Do not
-reintroduce chunked streaming ASR without measuring it.
-
 ### The model invents facts
 
 Expected — a 1B model will not honour "copied never invented" on instruction alone. It
@@ -209,9 +196,3 @@ adb shell "cd /data/local/tmp/ot && ./llama-cli -m Llama-3.2-1B-Instruct-Q4_0.gg
 Unbounded repetition in the grammar. `slots` is capped at `{0,2}` extra pairs — an
 objective never has more than three. This cut decode from 160 tokens to ~30.
 
-### Bengali produces nonsense
-
-Measured on device, whole utterance, `-l bn`: tiny → `"Keep it to soul."`,
-base → `"ki kottisu"`. This is the models, not the pipeline, and matches published
-67–110 % WER for Whisper on Bengali. English is near-perfect. **Do not spend time on
-this** — record it in `docs/LANGUAGES.md` as a result and demo in Hindi or Spanish.

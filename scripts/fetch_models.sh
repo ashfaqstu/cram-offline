@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Downloads and verifies the model weights OmniTalk Edge needs.
+# Downloads and verifies the model weights Cram needs.
 #
 # Weights are NOT committed to this repository. Llama 3.2 is distributed under
 # the Llama 3.2 Community License, not Apache-2.0 — see NOTICE.
@@ -15,7 +15,6 @@ mkdir -p models
 cd models
 
 LB="https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main"
-WB="https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
 
 fetch() {  # fetch <url> <filename> <sha256>
   local url="$1" name="$2" want="$3"
@@ -40,10 +39,6 @@ fetch "$LB/Llama-3.2-1B-Instruct-Q4_0.gguf"   Llama-3.2-1B-Instruct-Q4_0.gguf \
       fa0390e7c043f89ae1847bd6682d748041a99d4ef3de0e0b27d33b6af97a8be8
 fetch "$LB/Llama-3.2-1B-Instruct-Q4_K_M.gguf" Llama-3.2-1B-Instruct-Q4_K_M.gguf \
       6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83
-fetch "$WB/ggml-base-q5_1.bin" ggml-base-q5_1.bin \
-      422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898
-fetch "$WB/ggml-tiny-q5_1.bin" ggml-tiny-q5_1.bin \
-      818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7
 
 if [ "${1:-}" = "--with-q8" ]; then
   echo "==> Q8_0 (1.32 GB, optional)"

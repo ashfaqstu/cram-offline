@@ -1,16 +1,15 @@
-// OmniTalk Edge — single JNI translation unit for llama.cpp + whisper.cpp.
+// Cram — single JNI translation unit over llama.cpp.
 //
 // All API names below were verified against the pinned headers on 2026-08-13:
 //   llama.cpp   9558fa44c92746a58dd07ad1bf0c889715b938a6
-//   whisper.cpp 592feef04a1802b18cbeffd0fd0eb5d02570c2ec
 // If you bump either submodule, re-run the drift check in SPEC.md Part 7.3.
 //
 // THREADING CONTRACT (this is HetPipe, and it is load-bearing):
 //   GGML worker threads inherit the affinity mask of the thread that creates
 //   them, and the pool is created when the model loads. So Kotlin must call
-//   setAffinity() on a dedicated single-thread dispatcher BEFORE llmLoad/asrLoad
+//   setAffinity() on a dedicated single-thread dispatcher BEFORE llmLoad
 //   on that same thread, and every later call for that model must come from the
-//   same thread. Pipeline.kt enforces this.
+//   same thread. RagEngine.kt enforces this.
 //
 // MEMORY CONTRACT: n_ctx is always passed explicitly. Llama 3.2's trained
 // context is 131072 tokens; defaulting to it sizes a multi-GB KV cache and the
@@ -29,7 +28,6 @@
 #include <algorithm>
 
 #include "llama.h"
-#include "whisper.h"
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "otjni", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "otjni", __VA_ARGS__)
@@ -82,7 +80,7 @@ Java_dev_omnitalk_Native_llmLoad(JNIEnv* env, jobject, jstring jpath,
     mp.n_gpu_layers     = 0;      // CPU only — that is the whole point
     // Enables GGML's "extra buffer types", i.e. the aarch64 weight-repack path.
     // This — NOT KleidiAI — is what makes Q4_0 ~15% faster at prefill than
-    // Q4_K_M on this device. KleidiAI never loads here (see docs/OPTIMIZATION.md O1).
+    // Q4_K_M on this device. KleidiAI never loads here (see docs/REPRODUCE.md).
     mp.use_extra_bufts  = true;
     L->model = llama_model_load_from_file(path, mp);
     LOGI("llmLoad path=%s n_ctx=%d t=%d tb=%d -> %p", path, n_ctx, n_threads, n_threads_batch,
@@ -324,65 +322,6 @@ Java_dev_omnitalk_Native_llmFree(JNIEnv*, jobject, jlong h) {
     delete L;
 }
 
-// ─── ASR ─────────────────────────────────────────────────────────────────────
-extern "C" JNIEXPORT jlong JNICALL
-Java_dev_omnitalk_Native_asrLoad(JNIEnv* env, jobject, jstring jpath) {
-    const char* p = env->GetStringUTFChars(jpath, nullptr);
-    whisper_context_params cp = whisper_context_default_params();
-    cp.use_gpu = false;                        // CPU only
-    whisper_context* c = whisper_init_from_file_with_params(p, cp);
-    LOGI("asrLoad path=%s -> %p", p, (void*) c);
-    env->ReleaseStringUTFChars(jpath, p);
-    return reinterpret_cast<jlong>(c);
-}
-
-// pcm must be 16 kHz mono float32 in [-1,1]. Anything else yields confident
-// nonsense rather than an error — see SPEC.md Part 8.5.
-extern "C" JNIEXPORT jstring JNICALL
-Java_dev_omnitalk_Native_asrTranscribe(JNIEnv* env, jobject, jlong h,
-                                       jfloatArray jpcm, jstring jlang, jint n_threads) {
-    auto* c = reinterpret_cast<whisper_context*>(h);
-    if (!c) return env->NewStringUTF("");
-
-    jsize n = env->GetArrayLength(jpcm);
-    if (n <= 0) return env->NewStringUTF("");
-    std::vector<float> pcm((size_t) n);
-    env->GetFloatArrayRegion(jpcm, 0, n, pcm.data());
-
-    const char* lang = env->GetStringUTFChars(jlang, nullptr);
-    std::string langStr(lang ? lang : "en");
-    env->ReleaseStringUTFChars(jlang, lang);
-
-    whisper_full_params p = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
-    p.n_threads       = n_threads;
-    p.language        = langStr.c_str();
-    p.translate       = false;
-    p.print_progress  = false;
-    p.print_realtime  = false;
-    p.print_timestamps= false;
-    p.no_timestamps   = true;
-    p.no_context      = true;     // chunked mode: each chunk stands alone
-    p.single_segment  = false;
-    p.suppress_blank  = true;
-
-    std::string out;
-    if (whisper_full(c, p, pcm.data(), (int) pcm.size()) == 0) {
-        const int ns = whisper_full_n_segments(c);
-        for (int i = 0; i < ns; ++i) {
-            const char* s = whisper_full_get_segment_text(c, i);
-            if (s) out += s;
-        }
-    } else {
-        LOGE("whisper_full failed");
-    }
-    return env->NewStringUTF(out.c_str());
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_dev_omnitalk_Native_asrFree(JNIEnv*, jobject, jlong h) {
-    auto* c = reinterpret_cast<whisper_context*>(h);
-    if (c) whisper_free(c);
-}
 
 // ─── topology ────────────────────────────────────────────────────────────────
 // Detected natively so the same APK adapts to any big.LITTLE Arm phone —

@@ -5,9 +5,8 @@ Single source of truth for what is done and what is next.
 
 New here? Read [`HANDOVER.md`](HANDOVER.md) first.
 
-The wider, spec-level tracker for the earlier speech-agent design is
-[`PROGRESS-FULL.md`](PROGRESS-FULL.md). It is history, not a plan — the
-product is **Cram**.
+The earlier speech-agent design is history, not a plan — its spec and verdict
+are parked in [`misc/speech-era/`](misc/speech-era/). The product is **Cram**.
 
 ---
 

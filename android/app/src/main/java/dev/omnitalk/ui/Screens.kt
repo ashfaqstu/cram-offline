@@ -635,8 +635,11 @@ fun SetupScreen(vm: AppState, onPickModel: () -> Unit) {
                      "It is one file, and it lands in your Downloads folder.")
                 Step(2, "Come back and pick it", "Cram copies it into its own storage, so you " +
                      "can delete the download afterwards.")
-                Step(3, "That is all", "It never needs the internet again — and it has no " +
-                     "permission to use it.")
+                // Not "never needs the internet again" — "again" concedes that Cram
+                // used it once, which is the exact claim the card below denies. The
+                // browser did the downloading; this app has never held the permission.
+                Step(3, "That is all", "Nothing from here touches the network. Cram has no " +
+                     "permission to — which is why the download had to happen in your browser.")
                 Spacer(Modifier.height(Space.m))
                 // ACTION_VIEW hands the URL to whatever browser is installed, so the
                 // download happens in that app's process. Cram still declares no

@@ -146,9 +146,12 @@ fun SettingsScreen(vm: AppState) {
             Card {
                 SectionLabel("How long answers are")
                 Spacer(Modifier.height(Space.s))
-                // 80 is the calibrated default, so the untouched app shows a
+                // Every value here is at or above MAX_ANSWER_TOKENS_MIN. A preset
+                // below the floor would be accepted, then quietly raised on the
+                // next launch — a control that does not stay where you put it.
+                // 220 is the calibrated default, so the untouched app shows a
                 // preset already lit rather than three empty boxes.
-                val lengths = listOf("A sentence" to 80, "A paragraph" to 150, "Full" to 220)
+                val lengths = listOf("Brief" to 160, "Full" to 220, "Longest" to 320)
                 val nearest = lengths.minByOrNull { kotlin.math.abs(s.maxAnswerTokens - it.second) }
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     for ((label, tok) in lengths) {

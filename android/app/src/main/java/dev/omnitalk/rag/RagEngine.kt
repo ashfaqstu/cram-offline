@@ -166,6 +166,14 @@ class RagEngine {
         append("Use only the excerpts given to you. ")
         append("Answer in one complete sentence that names the specific thing asked about, ")
         append("so the sentence makes sense on its own. Start with the answer, not a preamble. ")
+        // DO NOT add grounding instructions here. Asking the model in words to
+        // stop inventing was tried against the "John Coffman, 1972" fabrication:
+        // it did not remove it, and it changed an unrelated verified answer from
+        // "The Banker's algorithm." into "This is the correct answer, as the
+        // Banker's algorithm is indeed..." — the preamble this prompt already
+        // forbids two lines up. Greedy decoding on a 1B model is steered by what
+        // it is given, not by what it is told about what it is given. Ungrounded
+        // tails are removed after generation, in AppState.dropUngroundedTail.
         append("If the excerpts do not contain the answer, reply exactly: Not in these slides.")
         append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
     }
@@ -420,7 +428,20 @@ class RagEngine {
         // receives one or two, trimmed to the sentences that matched. The user
         // sees everything; the model reads only what it needs.
         const val TOP_K = 3                        // shown to the user
-        const val MAX_ANSWER_TOKENS = 80           // ~7 s at 9 tok/s
+        // A ceiling, not a target: generation stops at EOS, so a short answer
+        // still costs a short answer. 80 only ever bound the answers that needed
+        // to be long, and it cut them mid-word — "What are the four Coffman
+        // conditions?" ended at "4. **Circular Wait**: there exists a set of".
+        // That is the same failure as the 400-char passage budget, at the other
+        // end of the pipeline: tuned for latency, paid for in correctness. Time
+        // to first word, which is what we actually measure, does not move.
+        // 160 fits the longest real answer in the deck (the four conditions run
+        // ~130 tokens) without leaving a whole spare sentence for the model to
+        // fill with invention. Whatever fragment remains at the cap is cut back
+        // to the last completed sentence, so the padding never reaches the user.
+        const val MAX_ANSWER_TOKENS = 160
+        /** No saved value may cut a list-shaped answer in half again. */
+        const val MAX_ANSWER_TOKENS_MIN = 160
         // 8 s, not 5. Tuning purely for speed produced fast wrong answers: the
         // budget got tight enough to cut a numbered list in half, and a confident
         // wrong answer at 2 a.m. is worse than waiting three more seconds.

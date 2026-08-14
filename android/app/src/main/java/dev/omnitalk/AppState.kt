@@ -420,6 +420,10 @@ class AppState(app: Application) : AndroidViewModel(app) {
                 if (first == 0L) { first = System.currentTimeMillis(); lastTtftMs = first - t0 }
                 sb.append(piece); answer = sb.toString()
             }
+            answer = dropUngroundedTail(
+                trimToLastSentence(sb.toString()),
+                passages.joinToString(" ") { it.chunk.text }
+            )
             Regex("\"decode_tps\":([\\d.]+)").find(engine.lastTimings)
                 ?.let { lastDecodeTps = it.groupValues[1].toDouble() }
             streaming = false
@@ -586,6 +590,63 @@ class AppState(app: Application) : AndroidViewModel(app) {
             if (i >= 0 && c.moveToFirst()) return c.getString(i)
         }
         return uri.lastPathSegment ?: "document"
+    }
+
+    /**
+     * The token cap stops generation at a count, not at a sentence, so a long
+     * answer ends mid-word. Dropping the unfinished tail is the honest version:
+     * a fragment presented as an answer is worse than no fragment.
+     *
+     * The lookbehind matters. A numbered list is full of periods that end no
+     * sentence — cutting at the last plain '.' in "…holding it. 4. Circular
+     * wait — there exists a set of" lands on the "4." and leaves a bare list
+     * marker hanging. Only punctuation not preceded by a digit and followed by
+     * whitespace or end-of-text closes a sentence here.
+     *
+     * Never fires when the text already ends cleanly, and never when there is
+     * no complete sentence to fall back to — half an answer beats none.
+     */
+    private fun trimToLastSentence(s: String): String {
+        val t = s.trim()
+        if (t.isEmpty() || t.last() in ".!?") return t
+        val end = Regex("(?<![0-9])[.!?](?=\\s|$)").findAll(t).lastOrNull() ?: return t
+        return t.substring(0, end.range.last + 1)
+    }
+
+    /**
+     * Drop a closing sentence that introduces a name or a year the slides never
+     * mention.
+     *
+     * Any room left at the end of the answer budget is room the model fills, and
+     * what it filled it with was "named after John Coffman, who first described
+     * them in 1972" — appended to four correct conditions, carrying a slide
+     * citation, and wrong twice over (it is Edward G. Coffman Jr., 1971). A
+     * fabrication that cites a slide is worse than no answer, because the
+     * citation is what the reader trusts.
+     *
+     * Tightening the cap instead was the obvious fix and the wrong one: the
+     * conditions run to roughly 125 tokens, so any ceiling low enough to exclude
+     * the invented tail also risks amputating condition four — trading a false
+     * addition for a false omission.
+     *
+     * Only proper nouns and years are checked, only in the final sentence, and
+     * only when a sentence would survive. Those are what padding is made of, and
+     * both are cheap to verify against the passage the model was handed. A word
+     * that opens the sentence is skipped: it is capitalised by grammar, not by
+     * being a name. This is the check the flashcard path already applies before
+     * showing a card, moved onto the answer path.
+     */
+    private fun dropUngroundedTail(answer: String, sources: String): String {
+        val parts = Regex("(?<![0-9])(?<=[.!?])\\s+").split(answer.trim())
+        if (parts.size < 2) return answer          // never leave the reader nothing
+        val last = parts.last()
+        val hay = sources.lowercase()
+        val suspect = Regex("\\b(1[89]\\d{2}|20\\d{2}|[A-Z][a-zA-Z]{2,})\\b")
+            .findAll(last)
+            .drop(1)                               // the sentence's opening word
+            .map { it.value }
+            .any { !hay.contains(it.lowercase()) }
+        return if (suspect) parts.dropLast(1).joinToString(" ") else answer
     }
 
     override fun onCleared() { engine.close(); super.onCleared() }

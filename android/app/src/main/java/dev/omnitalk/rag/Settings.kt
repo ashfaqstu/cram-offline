@@ -66,6 +66,11 @@ class Settings(ctx: Context) {
         if (charBudget < RagEngine.PASSAGE_CHAR_BUDGET_MIN) {
             charBudget = RagEngine.PASSAGE_CHAR_BUDGET_MIN
         }
+        // Same floor at the output end. A budget large enough to hold a four-item
+        // list is worth nothing if the answer cap cuts the list off at item four.
+        if (maxAnswerTokens < RagEngine.MAX_ANSWER_TOKENS_MIN) {
+            maxAnswerTokens = RagEngine.MAX_ANSWER_TOKENS_MIN
+        }
     }
 
     fun save() {
@@ -122,7 +127,11 @@ class Settings(ctx: Context) {
 
     private companion object {
         /** Bump when calibration changes meaning, to discard stale saved values. */
-        const val SETTINGS_VERSION = 2
+        // 3: answer cap raised 80 -> 220. A phone that calibrated under v2 has
+        // 80 written to prefs, and without this bump that saved value would
+        // survive the upgrade and keep truncating — the exact trap the comment
+        // on storedVersion describes, sprung a second time.
+        const val SETTINGS_VERSION = 3
         const val K_VERSION = "settings_version"
         const val K_BUDGET = "char_budget"
         const val K_DECODE = "decode_threads"

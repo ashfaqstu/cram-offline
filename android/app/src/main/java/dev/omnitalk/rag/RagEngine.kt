@@ -208,6 +208,50 @@ class RagEngine {
         return out
     }
 
+    /**
+     * Generate flashcards or quiz questions about a topic.
+     *
+     * Retrieval comes first, exactly as it does for a question: the topic is a
+     * query, and only slides that actually match it are shown to the model.
+     * More passages than a normal answer, because study material should span a
+     * topic rather than answer one narrow point.
+     */
+    suspend fun study(
+        kind: StudyKind,
+        topic: String,
+        count: Int,
+        onToken: (String) -> Unit
+    ): Pair<String, List<Scored>> = withContext(disp) {
+        val query = topic.ifBlank { doc?.title.orEmpty() }
+        val hits = index?.search(query, STUDY_TOP_K).orEmpty()
+        if (hits.isEmpty()) return@withContext "" to emptyList()
+
+        var used = 0
+        val kept = ArrayList<Scored>()
+        for (h in hits) {
+            val room = STUDY_CHAR_BUDGET - used
+            if (room < MIN_USEFUL_PASSAGE) break
+            val text = Trim.toQuery(h.chunk.text, query, minOf(room, TOP_PASSAGE_MAX))
+            kept.add(Scored(h.chunk.copy(text = text), h.score))
+            used += text.length
+        }
+        lastPromptChars = used
+
+        Native.llmResetKv(llm)
+        Native.llmPrefill(llm, StudyPrompt.build(kind, topic, kept, count))
+        val out = Native.llmGenerate(llm, count * TOKENS_PER_ITEM, null, object : Native.TokenCb {
+            override fun onToken(piece: String) = onToken(piece)
+        })
+        lastTimings = Native.llmTimings(llm)
+        out to kept
+    }
+
+    /** Which slide a generated card most likely came from, for citation. */
+    fun pageFor(text: String): Int {
+        val hits = index?.search(text, 1).orEmpty()
+        return hits.firstOrNull()?.chunk?.page ?: 0
+    }
+
     fun close() {
         if (llm != 0L) runCatching { Native.llmFree(llm) }
         llm = 0
@@ -246,6 +290,16 @@ class RagEngine {
         const val TOP_PASSAGE_MAX = 850
         /** Below this a second passage is fragments, not context. */
         const val MIN_USEFUL_PASSAGE = 220
+        // Study material spans a topic rather than answering one point, so it
+        // reads more slides and accepts a longer wait — it is a deliberate
+        // "make me something" action with a progress indicator, not a question
+        // the reader is waiting on.
+        const val STUDY_TOP_K = 4
+        const val STUDY_CHAR_BUDGET = 1800
+        // 70, not 46. The model narrates around each card even when asked not
+        // to, and a budget that only just fits perfect output produces one card
+        // and a truncated second. Overshooting costs nothing when it stops early.
+        const val TOKENS_PER_ITEM = 70
 
         private val CALIBRATION_TEXT = buildString {
             append("Calibration passage. ")

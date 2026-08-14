@@ -67,6 +67,46 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
     // reader
     var readerPage by mutableStateOf(1)
 
+    // study: flashcards and quiz
+    var studyKind by mutableStateOf(StudyKind.Flashcards)
+    var studyTopic by mutableStateOf("")
+    var studyCount by mutableStateOf(5)
+    var cards by mutableStateOf<List<Card>>(emptyList()); private set
+    var studying by mutableStateOf(false); private set
+    var studyMs by mutableStateOf(0L)
+    var revealed = mutableStateListOf<Int>()
+
+    /**
+     * Build study material. Cards are parsed on every token, so they appear one
+     * at a time rather than after a silent twenty-second wait — the same reason
+     * answers stream.
+     */
+    fun generateStudy() {
+        if (!modelReady || studying || current == null) return
+        studying = true
+        cards = emptyList()
+        revealed.clear()
+        val t0 = System.currentTimeMillis()
+        scope.launch {
+            val sb = StringBuilder()
+            val (raw, _) = engine.study(studyKind, studyTopic, studyCount) { piece ->
+                sb.append(piece)
+                cards = StudyPrompt.parse(sb.toString()) { t -> engine.pageFor(t) }
+            }
+            val text = raw.ifBlank { sb.toString() }
+            android.util.Log.i("otstudy", "raw(${text.length}): ${text.take(600)}")
+            cards = StudyPrompt.parse(text) { t -> engine.pageFor(t) }
+            android.util.Log.i("otstudy", "parsed ${cards.size} cards")
+            studyMs = System.currentTimeMillis() - t0
+            studying = false
+            if (cards.isEmpty()) flash("Nothing found for that topic in these slides")
+        }
+    }
+
+    fun toggleReveal(i: Int) {
+        if (revealed.contains(i)) revealed.remove(i) else revealed.add(i)
+    }
+
     /** Lets non-UI code (the scripted test intent) drive navigation. 0=Slides 1=Ask 2=Source 3=Device */
     var requestedTab by mutableStateOf(-1)
 

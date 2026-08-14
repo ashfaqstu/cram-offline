@@ -170,7 +170,26 @@ fun TabIcon(index: Int, selected: Boolean) {
                 drawLine(c, Offset(w * 0.5f, h * 0.52f), Offset(w * 0.5f, h * 0.66f), s, StrokeCap.Round)
                 drawCircle(c, radius = s * 0.75f, center = Offset(w * 0.5f, h * 0.84f))
             }
-            2 -> {  // an open page with a marked line
+            2 -> {  // a stack of cards, front one offset
+                drawRoundRect(
+                    c, topLeft = Offset(w * 0.10f, h * 0.30f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.62f, h * 0.46f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 1.6f),
+                    style = Stroke(s)
+                )
+                drawRoundRect(
+                    Paper.Highlighter, topLeft = Offset(w * 0.28f, h * 0.16f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.62f, h * 0.46f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 1.6f)
+                )
+                drawRoundRect(
+                    c, topLeft = Offset(w * 0.28f, h * 0.16f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.62f, h * 0.46f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 1.6f),
+                    style = Stroke(s)
+                )
+            }
+            3 -> {  // an open page with a marked line
                 drawLine(c, Offset(w * 0.18f, h * 0.2f), Offset(w * 0.82f, h * 0.2f), s, StrokeCap.Round)
                 drawLine(Paper.Highlighter, Offset(w * 0.18f, h * 0.5f), Offset(w * 0.7f, h * 0.5f), s * 2.4f, StrokeCap.Round)
                 drawLine(c, Offset(w * 0.18f, h * 0.5f), Offset(w * 0.7f, h * 0.5f), s, StrokeCap.Round)

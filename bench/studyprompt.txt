@@ -1,0 +1,22 @@
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+You are a friendly study assistant. You help students revise by turning their lecture notes into flashcards.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Here are notes from my operating systems lecture:
+
+[slide 4] The four Coffman conditions
+A deadlock can arise only if all four of these hold at the same time:
+1. Mutual exclusion - at least one resource is held in a non-sharable mode.
+2. Hold and wait - a process holds at least one resource and is waiting for more.
+3. No preemption - a resource can be released only voluntarily by the process holding it.
+4. Circular wait - there exists a set of waiting processes P0, P1, ... Pn.
+
+[slide 6] Banker's algorithm
+The Banker's algorithm is a deadlock avoidance algorithm due to Dijkstra.
+Time complexity of the safety check is O(m x n^2), where m is the number of
+resource types and n is the number of processes.
+
+Please make 3 flashcards from these notes. Put each card on its own line like this:
+
+Q: What is X? | A: X is Y<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+

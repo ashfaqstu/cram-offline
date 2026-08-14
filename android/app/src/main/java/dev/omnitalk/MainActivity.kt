@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab(val label: String) {
-    Slides("Slides"), Ask("Ask"), Source("Source"), Settings("Settings")
+    Slides("Slides"), Ask("Ask"), Study("Study"), Source("Source"), Settings("Settings")
 }
 
 @Composable
@@ -114,6 +114,7 @@ private fun Root(vm: AppState) {
                 when (tab) {
                     Tab.Slides -> LibraryScreen(vm, onPick = { pick() }, onOpen = { tab = Tab.Ask })
                     Tab.Ask -> AskScreen(vm) { page -> vm.readerPage = page; tab = Tab.Source }
+                    Tab.Study -> StudyScreen(vm) { page -> vm.readerPage = page; tab = Tab.Source }
                     Tab.Source -> ReaderScreen(vm)
                     Tab.Settings -> SettingsScreen(vm)
                 }

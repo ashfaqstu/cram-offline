@@ -46,3 +46,7 @@ prebuilt/
 
 # scratch commit-message file
 .commitmsg
+
+# JVM crash dumps from out-of-memory/disk Gradle runs
+hs_err_pid*.log
+replay_pid*.log

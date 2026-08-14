@@ -50,7 +50,7 @@ A notification stealing focus mid-take has already invalidated two test runs.
       Script is ready: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md), including a
       validation pass, the shot list, and an analysis of what actually won the
       last Arm challenge.
-- [ ] **3. Final Devpost text** — copy is drafted in
+- [ ] **3. Final Devpost text** — paste-ready in [`docs/DEVPOST.md`](docs/DEVPOST.md); rationale in
       [`docs/plan/02-SUBMISSION.md`](docs/plan/02-SUBMISSION.md). Lead with the
       KleidiAI finding, not the idea: **Jackqr**, an offline study app with
       flashcards, took *third* in the previous Arm challenge, and Pinguin (same

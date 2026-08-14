@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -204,31 +205,38 @@ fun AskScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> Uni
                 // threw that away. Shown here it turns the deck into a checklist.
                 val left = vm.untouchedPages()
                 val covered = doc.pageCount - left.size
-                if (covered > 0) {
-                    Spacer(Modifier.height(Space.m))
-                    Card {
-                        SectionLabel("Where you are")
-                        Spacer(Modifier.height(Space.s))
-                        LinearProgressIndicator(
-                            progress = { covered.toFloat() / doc.pageCount },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Paper.Blue, trackColor = Paper.Rule
-                        )
-                        Spacer(Modifier.height(Space.s))
-                        Text(
-                            if (left.isEmpty())
+                // Shown even at zero. "11 slides, none covered, start on slide 1"
+                // is the most useful thing this screen can say to someone who has
+                // just opened a deck and does not know where to begin — which is
+                // the state cramming actually starts in.
+                Spacer(Modifier.height(Space.m))
+                Card {
+                    SectionLabel("Where you are")
+                    Spacer(Modifier.height(Space.s))
+                    LinearProgressIndicator(
+                        progress = { covered.toFloat() / doc.pageCount.coerceAtLeast(1) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Paper.Blue, trackColor = Paper.Rule
+                    )
+                    Spacer(Modifier.height(Space.s))
+                    Text(
+                        when {
+                            left.isEmpty() ->
                                 "Every slide has been asked about or turned into a card."
-                            else "$covered of ${doc.pageCount} slides covered. " +
-                                 "Not looked at yet: " +
-                                 left.take(6).joinToString(", ") +
-                                 if (left.size > 6) " and ${left.size - 6} more" else "",
-                            style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
-                        )
-                        if (left.isNotEmpty()) {
-                            Spacer(Modifier.height(Space.s))
-                            TextButton(onClick = { vm.makeCardsFromPage(left.first()) }) {
-                                Text("Start on slide ${left.first()}")
-                            }
+                            covered == 0 ->
+                                "${doc.pageCount} slides, none covered yet. Ask about one, or " +
+                                "make cards from it, and it counts as covered."
+                            else ->
+                                "$covered of ${doc.pageCount} slides covered. Not looked at yet: " +
+                                left.take(6).joinToString(", ") +
+                                if (left.size > 6) " and ${left.size - 6} more" else ""
+                        },
+                        style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
+                    )
+                    if (left.isNotEmpty()) {
+                        Spacer(Modifier.height(Space.s))
+                        TextButton(onClick = { vm.makeCardsFromPage(left.first()) }) {
+                            Text("Start on slide ${left.first()}")
                         }
                     }
                 }
@@ -550,6 +558,102 @@ private fun PdfPageItem(renderer: PdfRenderer?, index: Int) {
             Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = Paper.Blue)
             }
+        }
+    }
+}
+
+/**
+ * First-run screen when there is no model on disk.
+ *
+ * This used to be a one-line status reading "Model missing. Push it to
+ * /sdcard/Android/data/dev.omnitalk/files" — an instruction that assumes adb, a
+ * computer, and knowing what adb is. Anyone evaluating the app rather than
+ * building it was simply stuck at a dead end.
+ *
+ * It stays a manual step on purpose: fetching the weights in-app would need an
+ * INTERNET permission, and this app's strongest claim is that it holds none.
+ */
+@Composable
+fun SetupScreen(vm: AppState, onPickModel: () -> Unit) {
+    val progress = vm.modelCopyProgress
+    Box(Modifier.fillMaxSize().background(Paper.Stock)) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l),
+            verticalArrangement = Arrangement.Center
+        ) {
+            BrandHeader("One thing to set up")
+
+            Spacer(Modifier.height(Space.l))
+
+            if (progress != null) {
+                Card(accent = true) {
+                    Text("Copying the model", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(Space.s))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Paper.Blue, trackColor = Paper.Rule
+                    )
+                    Spacer(Modifier.height(Space.s))
+                    Text(
+                        "%.0f%% — this takes a few seconds and happens once.".format(progress * 100),
+                        style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
+                    )
+                }
+                return@Column
+            }
+
+            Card {
+                Text(
+                    "Cram needs a language model file to run. It is about 770 MB and " +
+                    "stays on this phone.",
+                    style = MaterialTheme.typography.bodyMedium, color = Paper.Ink
+                )
+                Spacer(Modifier.height(Space.m))
+                Step(1, "Download the model", "Llama-3.2-1B-Instruct-Q4_0.gguf from Hugging Face, " +
+                     "in any browser. It lands in your Downloads folder.")
+                Step(2, "Tap the button below", "Pick that file. Cram copies it into its own " +
+                     "storage, so you can delete the download afterwards.")
+                Step(3, "That is all", "It never needs the internet again — and it has no " +
+                     "permission to use it.")
+                Spacer(Modifier.height(Space.m))
+                Button(onClick = onPickModel, modifier = Modifier.fillMaxWidth()) {
+                    Text("Choose the model file")
+                }
+            }
+
+            Spacer(Modifier.height(Space.m))
+
+            Card {
+                SectionLabel("Why not just download it for you")
+                Spacer(Modifier.height(Space.s))
+                Text(
+                    "Doing that would mean asking Android for internet access. This app " +
+                    "declares no internet permission at all, which is what makes it unable " +
+                    "to send your documents anywhere. Check it yourself under App info → " +
+                    "Permissions. One extra tap seemed a fair price.",
+                    style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Step(n: Int, title: String, body: String) {
+    Row(Modifier.padding(bottom = Space.m)) {
+        Surface(shape = RoundedCornerShape(50), color = Paper.Blue, modifier = Modifier.size(24.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    "$n", style = MaterialTheme.typography.labelSmall,
+                    color = androidx.compose.ui.graphics.Color.White
+                )
+            }
+        }
+        Spacer(Modifier.width(Space.s))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = Paper.Ink)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft)
         }
     }
 }

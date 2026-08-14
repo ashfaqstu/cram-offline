@@ -81,6 +81,18 @@ private fun Root(vm: AppState) {
 
     fun pick() = picker.launch(arrayOf("application/pdf", "text/plain"))
 
+    val modelPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) vm.importModel(uri) }
+
+    // GGUF has no registered MIME type, so the chooser is opened wide. Narrowing
+    // it to application/octet-stream hides the file on some file managers, which
+    // looks like the app refusing to see a model that is plainly there.
+    if (vm.needsModel) {
+        SetupScreen(vm, onPickModel = { modelPicker.launch(arrayOf("*/*")) })
+        return
+    }
+
     Scaffold(
         containerColor = Paper.Stock,
         bottomBar = {

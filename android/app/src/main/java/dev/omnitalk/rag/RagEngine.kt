@@ -296,6 +296,22 @@ class RagEngine {
      * and every flashcard afterwards is built from a topic the model itself
      * recognised, together with the exact slides it came from.
      */
+    /**
+     * The model announcing itself rather than naming a topic.
+     *
+     * "Just the lines, please" is a request, not a guarantee, and a 1B model
+     * often opens with "Here are the main topics:". That line is the right
+     * length and word count to pass every other filter, so it became a topic in
+     * the picker — one that maps to real slides and produces cards about nothing
+     * in particular.
+     */
+    private fun isPreamble(s: String): Boolean {
+        val t = s.lowercase().trimEnd(':')
+        return t.endsWith("topics") || t.endsWith("notes") ||
+            t.startsWith("here are") || t.startsWith("here is") ||
+            t.startsWith("the main") || t.startsWith("sure") || t.startsWith("of course")
+    }
+
     suspend fun generateTopics(onProgress: (Int, Int) -> Unit): List<Topic> = withContext(disp) {
         val all = doc?.chunks.orEmpty()
         if (all.isEmpty()) return@withContext emptyList()
@@ -324,6 +340,7 @@ class RagEngine {
             val names = raw.lineSequence()
                 .map { it.trim().trim('-', '*', '.', ' ').replace(Regex("^\\d+[.)]\\s*"), "") }
                 .filter { it.length in 3..60 && it.count { c -> c == ' ' } <= 6 }
+                .filterNot { isPreamble(it) }
                 .take(2).toList()
 
             for (n in names) {

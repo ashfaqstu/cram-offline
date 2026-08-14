@@ -110,9 +110,73 @@ class AppState(app: Application) : AndroidViewModel(app) {
             saved.firstOrNull()?.let { select(it.first) }
         }
         if (!modelPath.exists()) {
-            status = "Model missing. Push it to ${modelPath.parent}"
+            needsModel = true
+            status = ""
             return
         }
+        loadModel()
+    }
+
+    /** True when there is no model on disk and the reader has to supply one. */
+    var needsModel by mutableStateOf(false); private set
+    /** 0f..1f while a chosen model file is being copied in, else null. */
+    var modelCopyProgress by mutableStateOf<Float?>(null); private set
+
+    /**
+     * Copy a model the reader picked with the system file chooser.
+     *
+     * THE ALTERNATIVE WAS AN INTERNET PERMISSION, AND IT WAS NOT WORTH IT.
+     * Downloading the weights on first run would be friendlier by a step, but
+     * this app's strongest claim is that it declares no internet permission and
+     * therefore *cannot* send a document anywhere - not as a promise in a privacy
+     * policy, but as something the reader can verify in Settings > App info. A
+     * one-time convenience is a poor trade for the one guarantee nothing else
+     * offers.
+     *
+     * The system picker grants access to exactly the file chosen and needs no
+     * permission at all, so this costs the reader one tap more than a download
+     * and costs the app nothing.
+     */
+    fun importModel(uri: Uri) {
+        if (modelCopyProgress != null) return
+        scope.launch {
+            modelCopyProgress = 0f
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val total = ctx.contentResolver.openAssetFileDescriptor(uri, "r")
+                        ?.use { it.length }?.takeIf { it > 0 } ?: -1L
+                    val tmp = File(modelPath.parentFile, "$MODEL_FILE.part")
+                    ctx.contentResolver.openInputStream(uri)?.use { input ->
+                        tmp.outputStream().use { out ->
+                            val buf = ByteArray(1 shl 16)
+                            var copied = 0L
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n <= 0) break
+                                out.write(buf, 0, n)
+                                copied += n
+                                if (total > 0) modelCopyProgress = (copied.toFloat() / total)
+                            }
+                        }
+                    } ?: return@runCatching false
+                    // Rename only once the copy is complete, so an interrupted
+                    // import cannot leave a half-file that looks like a model and
+                    // crashes the loader on next launch.
+                    if (modelPath.exists()) modelPath.delete()
+                    tmp.renameTo(modelPath)
+                }.getOrDefault(false)
+            }
+            modelCopyProgress = null
+            if (ok && modelPath.exists()) {
+                needsModel = false
+                loadModel()
+            } else {
+                flash("That file could not be copied")
+            }
+        }
+    }
+
+    private fun loadModel() {
         status = "Measuring this phone"
         scope.launch {
             val ok = engine.load(modelPath.absolutePath, topo)

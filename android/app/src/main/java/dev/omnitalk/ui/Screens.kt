@@ -1,14 +1,20 @@
 package dev.omnitalk.ui
 
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -16,10 +22,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.omnitalk.AppState
 import dev.omnitalk.rag.Document
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // ---- Slides -----------------------------------------------------------------
 
@@ -83,10 +95,28 @@ private fun DocCard(d: Document, selected: Boolean, onClick: () -> Unit, onDelet
     var confirming by remember { mutableStateOf(false) }
     Card(Modifier.clickable(onClick = onClick), accent = selected) {
         Row(verticalAlignment = Alignment.Top) {
-            Text(
-                d.title, style = MaterialTheme.typography.titleMedium,
-                maxLines = 2, color = Paper.Ink, modifier = Modifier.weight(1f)
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    d.title, style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2, color = Paper.Ink
+                )
+                if (selected) {
+                    Spacer(Modifier.height(Space.xs))
+                    // "opened" label: a small blue box sitting directly under the title
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Paper.Blue,
+                        modifier = Modifier.wrapContentSize()
+                    ) {
+                        Text(
+                            "opened",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+            }
             // Two taps to delete, no dialog. A dialog for one destructive action
             // on a list item is heavier than the action deserves; asking in
             // place is enough to stop an accident.
@@ -108,22 +138,22 @@ private fun DocCard(d: Document, selected: Boolean, onClick: () -> Unit, onDelet
             Pill("${d.pageCount} slides")
             Pill("${d.chunks.size} passages")
             if (d.isSample) Pill("sample", Tone.Mark)
-            if (selected) Pill("open", Tone.Good)
         }
     }
 }
 
 // ---- Ask --------------------------------------------------------------------
 
-private val SUGGESTIONS = listOf(
-    "When is assignment 3 due?",
-    "What are the four Coffman conditions?",
-    "What is the time complexity of the Banker's algorithm?"
+// Fallback suggestions when the deck has no usable headings yet
+private val FALLBACK_SUGGESTIONS = listOf(
+    "What are the main topics covered here?",
+    "Summarise the key points on slide 1",
+    "What is the most important concept in this deck?"
 )
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AskScreen(vm: AppState, onCite: (Int) -> Unit) {
+fun AskScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> Unit) {
     val doc = vm.current
     if (doc == null) {
         EmptyState("Nothing loaded yet", "Open a deck in the Slides tab, then ask it anything.")
@@ -135,16 +165,13 @@ fun AskScreen(vm: AppState, onCite: (Int) -> Unit) {
     LaunchedEffect(vm.answer) { if (vm.streaming) scroll.animateScrollTo(scroll.maxValue) }
 
     Column(Modifier.fillMaxSize()) {
-        // The question is pinned, not scrolled.
-        // The answer auto-scrolls as it writes, which used to carry the question
-        // off the top of the screen — leaving a page of answers with no visible
-        // sign of what was asked.
-        if (vm.askedQuestion.isEmpty()) {
-            ScreenHeader("Ask", doc.title)
-        } else {
+        // Deck-title button — always visible, tapping it navigates to Slides.
+        DeckTitleBar(title = doc.title, onNavigateToSlides = onNavigateToSlides)
+        // The "Ask" header is always shown so the screen context is clear.
+        // The question replaces the spacer below it once one has been asked.
+        ScreenHeader("Ask", tight = true)
+        if (vm.askedQuestion.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.l, bottom = Space.s)) {
-                Text(doc.title, style = MaterialTheme.typography.bodySmall, color = Paper.InkFaint)
-                Spacer(Modifier.height(3.dp))
                 Text(
                     vm.askedQuestion,
                     style = MaterialTheme.typography.headlineSmall,
@@ -158,7 +185,8 @@ fun AskScreen(vm: AppState, onCite: (Int) -> Unit) {
             if (vm.answer.isEmpty() && !vm.streaming && vm.passages.isEmpty()) {
                 SectionLabel("Try one of these")
                 Spacer(Modifier.height(Space.s))
-                SUGGESTIONS.forEachIndexed { i, s ->
+                val shown = vm.suggestions.ifEmpty { FALLBACK_SUGGESTIONS }
+                shown.forEachIndexed { i, s ->
                     Appear(delayMs = 80 * i) {
                         Card(Modifier.padding(bottom = Space.s).clickable {
                             vm.question = s; vm.ask()
@@ -290,44 +318,198 @@ fun AskScreen(vm: AppState, onCite: (Int) -> Unit) {
 // ---- Source -----------------------------------------------------------------
 
 @Composable
-fun ReaderScreen(vm: AppState) {
+fun ReaderScreen(vm: AppState, onNavigateToSlides: () -> Unit) {
     val doc = vm.current
     if (doc == null) { EmptyState("Nothing loaded yet", "Open a deck in the Slides tab."); return }
     val pages = vm.pagesOf(doc)
     val page = vm.readerPage.coerceIn(1, maxOf(pages.size, 1))
+    val pdfUri = vm.pdfUriOf(doc)
+
+    // Sub-view toggle: Original PDF | Extracted Slides
+    // Only show Original PDF tab if we have the URI (imported this session)
+    var showOriginal by remember(doc.id) { mutableStateOf(false) }
+    // If the URI is gone (deck reloaded from disk), fall back to slides view
+    val canShowOriginal = pdfUri != null
 
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Slide $page", doc.title)
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Space.l)
+        DeckTitleBar(title = doc.title, onNavigateToSlides = onNavigateToSlides)
+
+        // Sub-tab row
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Space.s, vertical = Space.xs),
+            horizontalArrangement = Arrangement.spacedBy(Space.s)
         ) {
-            Appear(delayMs = 0) {
-                Card {
-                    HighlightedText(
-                        text = pages.getOrNull(page - 1)?.trim().orEmpty()
-                            .ifEmpty { "This slide has no text that could be read." },
-                        query = vm.askedQuestion
+            SubTabButton(
+                label = "Extracted Slides",
+                selected = !showOriginal,
+                onClick = { showOriginal = false },
+                modifier = Modifier.weight(1f)
+            )
+            SubTabButton(
+                label = "Original PDF",
+                selected = showOriginal && canShowOriginal,
+                enabled = canShowOriginal,
+                onClick = { if (canShowOriginal) showOriginal = true },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (showOriginal && canShowOriginal) {
+            PdfPageViewer(uri = pdfUri!!, modifier = Modifier.weight(1f))
+        } else {
+            // Extracted slides view (original behaviour)
+            ScreenHeader("Slide $page", tight = true)
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Space.l)
+            ) {
+                Appear(delayMs = 0) {
+                    Card {
+                        HighlightedText(
+                            text = pages.getOrNull(page - 1)?.trim().orEmpty()
+                                .ifEmpty { "This slide has no text that could be read." },
+                            query = vm.askedQuestion
+                        )
+                    }
+                }
+                Spacer(Modifier.height(Space.l))
+            }
+            Surface(color = Paper.Card, shadowElevation = 8.dp) {
+                Row(
+                    Modifier.fillMaxWidth().padding(Space.m),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { vm.readerPage = page - 1 }, enabled = page > 1) { Text("Back") }
+                    Text(
+                        "$page of ${pages.size}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono),
+                        color = Paper.InkSoft
                     )
+                    TextButton(
+                        onClick = { vm.readerPage = page + 1 },
+                        enabled = page < pages.size
+                    ) { Text("Next") }
                 }
             }
-            Spacer(Modifier.height(Space.l))
         }
-        Surface(color = Paper.Card, shadowElevation = 8.dp) {
-            Row(
-                Modifier.fillMaxWidth().padding(Space.m),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = { vm.readerPage = page - 1 }, enabled = page > 1) { Text("Back") }
-                Text(
-                    "$page of ${pages.size}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono),
-                    color = Paper.InkSoft
+    }
+}
+
+/** Compact toggle button for sub-views inside a screen. */
+@Composable
+private fun SubTabButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) Paper.Blue else Paper.Card,
+        border = BorderStroke(1.dp, if (selected) Paper.Blue else Paper.Rule),
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) androidx.compose.ui.graphics.Color.White
+                    else if (enabled) Paper.InkSoft else Paper.InkFaint,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 9.dp, horizontal = Space.s)
+        )
+    }
+}
+
+/**
+ * Renders the original PDF file page-by-page using Android's built-in PdfRenderer.
+ * Pages are rendered as bitmaps in a scrollable lazy column.
+ * PdfRenderer requires a seekable FileDescriptor, so we open via the ContentResolver.
+ */
+@Composable
+private fun PdfPageViewer(uri: Uri, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    var pageCount by remember { mutableStateOf(0) }
+    var renderer by remember { mutableStateOf<PdfRenderer?>(null) }
+
+    DisposableEffect(uri) {
+        val fd = ctx.contentResolver.openFileDescriptor(uri, "r")
+        val r = fd?.let { PdfRenderer(it) }
+        renderer = r
+        pageCount = r?.pageCount ?: 0
+        onDispose { r?.close(); fd?.close() }
+    }
+
+    if (pageCount == 0) {
+        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(
+                "Original PDF not available.\nImport the file again to view it here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Paper.InkSoft,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(Space.xl)
+            )
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = Space.s, vertical = Space.s),
+        verticalArrangement = Arrangement.spacedBy(Space.s),
+        state = rememberLazyListState()
+    ) {
+        items(pageCount) { index ->
+            PdfPageItem(renderer = renderer, index = index)
+        }
+    }
+}
+
+@Composable
+private fun PdfPageItem(renderer: PdfRenderer?, index: Int) {
+    var bitmap by remember(index) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(renderer, index) {
+        if (renderer == null) return@LaunchedEffect
+        bitmap = withContext(Dispatchers.Default) {
+            runCatching {
+                val page = renderer.openPage(index)
+                // Scale to 1080px wide for readability; maintain aspect ratio
+                val scale = 1080f / page.width
+                val bmp = Bitmap.createBitmap(
+                    1080, (page.height * scale).toInt(), Bitmap.Config.ARGB_8888
                 )
-                TextButton(
-                    onClick = { vm.readerPage = page + 1 },
-                    enabled = page < pages.size
-                ) { Text("Next") }
+                bmp.eraseColor(android.graphics.Color.WHITE)
+                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                page.close()
+                bmp
+            }.getOrNull()
+        }
+    }
+    val bmp = bitmap
+    if (bmp != null) {
+        Card {
+            androidx.compose.foundation.Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = "Page ${index + 1}",
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "Page ${index + 1} of ${renderer?.pageCount ?: 0}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Paper.InkFaint,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = Space.xs)
+            )
+        }
+    } else {
+        Card {
+            Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = Paper.Blue)
             }
         }
     }

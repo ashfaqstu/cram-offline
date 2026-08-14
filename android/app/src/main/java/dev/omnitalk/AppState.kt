@@ -90,6 +90,8 @@ class AppState(app: Application) : AndroidViewModel(app) {
     data class QA(val q: String, val a: String, val pages: List<Int>, val ms: Long)
 
     private val pagesById = HashMap<String, List<String>>()
+    /** Original PDF URI, kept in RAM only — content:// grants are not persisted. */
+    private val pdfUriById = HashMap<String, Uri>()
     val modelPath: File get() = File(ctx.getExternalFilesDir(null), MODEL_FILE)
 
     init { boot() }
@@ -177,6 +179,7 @@ class AppState(app: Application) : AndroidViewModel(app) {
                 chunks = chunks, charCount = res.charCount
             )
             pagesById[doc.id] = res.pages
+            pdfUriById[doc.id] = uri
             docs.removeAll { it.id == doc.id }
             docs.add(0, doc)
             withContext(Dispatchers.IO) { store.save(doc, res.pages) }
@@ -214,6 +217,8 @@ class AppState(app: Application) : AndroidViewModel(app) {
     }
 
     fun pagesOf(d: Document): List<String> = pagesById[d.id] ?: emptyList()
+    /** Returns the original PDF Uri if the user imported it this session, null otherwise. */
+    fun pdfUriOf(d: Document): Uri? = pdfUriById[d.id]
 
     fun deleteDoc(d: Document) {
         docs.remove(d)

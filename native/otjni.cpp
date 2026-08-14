@@ -189,9 +189,19 @@ Java_dev_omnitalk_Native_llmGenerate(JNIEnv* env, jobject, jlong h, jint max_tok
         if (gs) llama_sampler_chain_add(chain, gs);
         else    LOGE("grammar failed to parse — falling back to unconstrained");
     }
-    llama_sampler_chain_add(chain, llama_sampler_init_top_k(40));
-    llama_sampler_chain_add(chain, llama_sampler_init_temp(0.4f));
-    llama_sampler_chain_add(chain, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    // GREEDY, NOT SAMPLED — the same question must give the same answer.
+    //
+    // This was top_k(40) + temp(0.4) + dist(LLAMA_DEFAULT_SEED). A random seed
+    // per call meant "what algorithm avoids deadlock?" answered correctly on one
+    // tap and wrongly on the next, from identical retrieved text. For a study
+    // tool that is not a quirk, it is the product failing: a student cannot tell
+    // which of the two answers to trust, and a demo becomes a coin flip.
+    //
+    // Nothing here needs creative variety. The passage is already in front of the
+    // model and the job is to restate it faithfully, so the highest-probability
+    // token is always the right choice. Greedy also removes temperature as a
+    // confound when judging whether a wrong answer came from bad retrieval.
+    llama_sampler_chain_add(chain, llama_sampler_init_greedy());
 
     jmethodID onTok = nullptr;
     if (cb) {

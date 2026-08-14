@@ -8,7 +8,9 @@
 
     <application
         android:allowBackup="false"
-        android:label="Sift"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="Cram"
         android:supportsRtl="true"
         android:theme="@style/Theme.OmniTalk">
         <activity

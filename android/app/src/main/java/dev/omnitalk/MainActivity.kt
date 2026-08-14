@@ -114,9 +114,9 @@ private fun Root(vm: AppState) {
                 // an animation completing.
                 when (tab) {
                     Tab.Slides -> LibraryScreen(vm, onPick = { pick() }, onOpen = { tab = Tab.Ask })
-                    Tab.Ask -> AskScreen(vm) { page -> vm.readerPage = page; tab = Tab.Source }
-                    Tab.Study -> StudyScreen(vm) { page -> vm.readerPage = page; tab = Tab.Source }
-                    Tab.Source -> ReaderScreen(vm)
+                    Tab.Ask -> AskScreen(vm, onCite = { page -> vm.readerPage = page; tab = Tab.Source }, onNavigateToSlides = { tab = Tab.Slides })
+                    Tab.Study -> StudyScreen(vm, onCite = { page -> vm.readerPage = page; tab = Tab.Source }, onNavigateToSlides = { tab = Tab.Slides })
+                    Tab.Source -> ReaderScreen(vm, onNavigateToSlides = { tab = Tab.Slides })
                     Tab.Settings -> SettingsScreen(vm)
                 }
             }

@@ -179,16 +179,32 @@ class RagEngine {
         // 220-token answer takes 24 s, and the questions this is built for have
         // one-sentence answers.
         sb.append("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n")
+        // "One SHORT sentence" plus greedy decoding produced one-WORD answers:
+        // "what algorithm avoids deadlock" was answered "Avoidance" from a slide
+        // that names the Banker's algorithm in its first line. Technically a
+        // fragment of the truth and useless to revise from. The instruction now
+        // asks for a complete sentence that names the thing, which costs a few
+        // tokens and makes the answer stand on its own away from the slide.
         sb.append("You answer questions about a student's lecture slides. ")
-        sb.append("Use ONLY the excerpts given to you. ")
-        sb.append("Answer in one short sentence, with no preamble. ")
+        sb.append("Use only the excerpts given to you. ")
+        sb.append("Answer in one complete sentence that names the specific thing asked about, ")
+        sb.append("so the sentence makes sense on its own. Start with the answer, not a preamble. ")
         sb.append("If the excerpts do not contain the answer, reply exactly: Not in these slides.")
         sb.append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
-        for (p in kept) {
-            sb.append("[slide ").append(p.chunk.page).append("] ")
+        // The first passage is marked as the best match rather than left as one
+        // of an unordered pair. Rank is information the retriever has and the
+        // model otherwise never sees, and when a second passage is present it is
+        // by definition nearly as topical — so without the label the model has no
+        // reason to prefer the one that actually scored highest.
+        for ((i, p) in kept.withIndex()) {
+            sb.append(if (i == 0) "[best match — slide " else "[also possibly relevant — slide ")
+                .append(p.chunk.page).append("]\n")
                 .append(p.chunk.text.trim()).append("\n\n")
         }
         sb.append("Question: ").append(question.trim())
+        if (kept.size > 1) {
+            sb.append("\n(Answer from the best match unless it plainly does not contain the answer.)")
+        }
         sb.append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n")
         return sb.toString()
     }
@@ -364,7 +380,19 @@ class RagEngine {
         const val PASSAGE_CHAR_BUDGET_MIN = 900
         const val PASSAGE_CHAR_BUDGET_MAX = 2400   // fast phones may use more
         /** Second hit is "close" above this fraction of the top score. */
-        const val RUNNER_UP_RATIO = 0.55
+        // 0.80, not 0.55. A second passage is only worth sending when it is
+        // nearly tied with the winner; below that it is a distractor, and a 1B
+        // model cannot be relied on to ignore a distractor that looks topical.
+        //
+        // Measured failure: "what algorithm avoids deadlock" retrieved the
+        // Banker's algorithm slide first and the "Deadlock handling strategies"
+        // slide second at ~60% of the score. The strategies slide lists
+        // prevention, avoidance, detection and recovery, and the ostrich
+        // algorithm one after another, and the model answered "Detection and
+        // recovery" — a phrase from the distractor, while the correct answer sat
+        // in the first line of the top passage. Retrieval was never wrong here;
+        // it was out-voted.
+        const val RUNNER_UP_RATIO = 0.80
         /** The best passage may take this much before anything else is considered. */
         const val TOP_PASSAGE_MAX = 850
         /** Below this a second passage is fragments, not context. */

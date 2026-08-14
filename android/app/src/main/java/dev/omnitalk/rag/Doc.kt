@@ -33,7 +33,36 @@ data class Chunk(
     companion object {
         private val SPLIT = Regex("[^\\p{L}\\p{N}]+")
         fun tokenize(s: String): List<String> =
-            s.lowercase().split(SPLIT).filter { it.length > 1 && it !in STOP }
+            s.lowercase().split(SPLIT).filter { it.length > 1 && it !in STOP }.map(::stem)
+
+        /**
+         * Crude suffix stripping, applied to queries and passages alike.
+         *
+         * Without it, "what algorithm avoids deadlock" could not reach the slide
+         * that says "deadlock avoidance algorithm": `avoids` and `avoidance` are
+         * simply different strings. The query then scored on `algorithm` and
+         * `deadlock` alone, the heading boost handed it to the "Deadlock handling
+         * strategies" slide, and the app confidently answered "the ostrich
+         * algorithm" — which ignores deadlocks rather than avoiding them.
+         *
+         * Deliberately not a real stemmer. Porter would pull in a table of rules
+         * to fix what four suffixes cover on technical prose, and every extra rule
+         * is another chance to collapse two words that should stay apart.
+         * Over-stemming is silent: it does not error, it just retrieves the wrong
+         * slide. The length floors keep short words intact, and both sides of the
+         * comparison go through this same function, so even a wrong stem stays
+         * consistent between query and index.
+         */
+        fun stem(w: String): String {
+            if (w.length < 6) return w
+            for (suf in arrayOf("ance", "ence", "ing", "ion", "ed", "es", "s")) {
+                if (w.endsWith(suf) && w.length - suf.length >= 4) {
+                    if (suf == "s" && w.endsWith("ss")) return w   // class, process
+                    return w.dropLast(suf.length)
+                }
+            }
+            return w
+        }
 
         // Only the words that would otherwise dominate every score. Deliberately
         // short — over-filtering hurts recall on technical documents.

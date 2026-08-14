@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
@@ -162,8 +164,17 @@ fun EmptyState(title: String, body: String, action: (@Composable () -> Unit)? = 
 }
 
 @Composable
-fun ScreenHeader(title: String, subtitle: String? = null) {
-    Column(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = Space.l, bottom = Space.m)) {
+/**
+ * @param tight for screens that sit under a [DeckTitleBar]. Without it the
+ * default top padding stacks on the bar's and the screen title drifts so far
+ * down it reads as belonging to the content rather than to the screen.
+ */
+fun ScreenHeader(title: String, subtitle: String? = null, tight: Boolean = false) {
+    Column(Modifier.fillMaxWidth().padding(
+        start = Space.l, end = Space.l,
+        top = if (tight) Space.s else Space.l,
+        bottom = if (tight) Space.s else Space.m
+    )) {
         Text(title, style = MaterialTheme.typography.headlineSmall, color = Paper.Ink)
         if (subtitle != null) {
             Spacer(Modifier.height(2.dp))
@@ -171,3 +182,56 @@ fun ScreenHeader(title: String, subtitle: String? = null) {
         }
     }
 }
+
+/**
+ * A clickable deck-title box, styled like a button with margins.
+ *
+ * Sits pinned above the scrollable content on Ask, Study, and Source screens.
+ * Looks like the "Open another PDF" button — a contained rounded rectangle,
+ * not a full-bleed bar — with proper padding on all sides. Tapping navigates
+ * back to the Slides menu.
+ */
+@Composable
+fun DeckTitleBar(title: String, onNavigateToSlides: () -> Unit) {
+    // Wider and squarer than a card: this is a control, not a container, and it
+    // should read as the same family as the "Open another PDF" button. The bottom
+    // margin is tight because the screen title sits directly under it — the two
+    // are one header block, not two stacked ones.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = Space.xs, end = Space.xs, top = Space.s, bottom = 2.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Paper.BlueSoft,
+            border = BorderStroke(1.dp, Paper.Blue.copy(alpha = 0.30f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onNavigateToSlides)
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Space.m, vertical = Space.m),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "‹",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Paper.Blue,
+                    modifier = Modifier.padding(end = Space.s)
+                )
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Paper.Blue,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+

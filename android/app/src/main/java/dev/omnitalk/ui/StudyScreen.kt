@@ -30,7 +30,7 @@ import dev.omnitalk.AppState
  * somewhere to actually use the cards, so Quiz became Practice.
  */
 @Composable
-fun StudyScreen(vm: AppState, onCite: (Int) -> Unit) {
+fun StudyScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> Unit) {
     val doc = vm.current
     if (doc == null) {
         EmptyState("Nothing loaded yet", "Open a deck in the Slides tab to make flashcards from it.")
@@ -41,7 +41,8 @@ fun StudyScreen(vm: AppState, onCite: (Int) -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Flashcards", doc.title)
+        DeckTitleBar(title = doc.title, onNavigateToSlides = onNavigateToSlides)
+        ScreenHeader("Flashcards", tight = true)
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Space.l)) {
 

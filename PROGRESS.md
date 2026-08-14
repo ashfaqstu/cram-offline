@@ -21,11 +21,30 @@ Armv8.2-A, and we measured where the speed actually comes from instead.**
 
 ---
 
+## Verify before recording — 5 minutes, do not skip
+
+The phone must be **quiet**: close other apps, Do Not Disturb on, plugged in and cool.
+A notification stealing focus mid-take has already invalidated two test runs.
+
+1. **Determinism.** Ask *"what algorithm avoids deadlock"* **three times in a row**,
+   touching nothing in between. All three must read **exactly** the same. If any
+   differs, stop — check `llama_sampler_init_greedy` is still in `native/otjni.cpp`,
+   and re-test with the KV prefix cache disabled (`systemTokens = 0` forced) to see
+   whether the cache is the cause. **This is the one outstanding risk.**
+2. **Correctness.** Those three demo questions still answer right (table below).
+3. **Persistence.** Make cards → practise → force-stop → reopen → cards and marks
+   still there.
+4. **Coverage.** Ask tab shows "N of 11 slides covered".
+
+---
+
 ## Right now — do these in order
 
-- [ ] **1. Push the repo public + save a Devpost draft.** The only irreversible
-      deadline. Do it before anything else — Devpost allows edits until cutoff.
-      - `git push -u origin main --force` (history was rewritten)
+- [ ] **1. Push the repo + cut a Release.** The README's install path links to
+      `releases/latest` and expects an APK named **`cram.apk`** — without it the
+      first thing a judge clicks is a 404.
+      - `git push -u origin main` (remote is empty; no force needed)
+      - upload `android/app/build/outputs/apk/release/app-release.apk` as `cram.apk`
       - repo must be **public**, GitHub About must show **Apache-2.0**
       - select the **Mobile AI** track
 - [ ] **2. Video** ≤ 3:00, public on YouTube, real device, no speed-ups.
@@ -137,3 +156,31 @@ Armv8.2-A, and we measured where the speed actually comes from instead.**
 - ❌ that KleidiAI is broken — it is *inert here*, and correct on i8mm/SME hardware
 - ❌ any latency figure not measured on the actual phone
 - ❌ that the idea is novel — lead with the measurement instead
+
+---
+
+## Optimizations, and what is left
+
+| Done | Effect |
+|---|---|
+| Retrieve many, send few (BM25 1–7 ms, 1–2 passages) | 34.5 s → ~11 s first word |
+| Greedy budget allocation | stopped truncating the winning passage |
+| Device calibration at startup | budget sized to the phone, not to ours |
+| Separate prefill/decode thread counts (8 / 6) | avoids the 58% decode cliff |
+| Q4_0 + GGML aarch64 repack | +15% prefill over Q4_K_M |
+| **KV prefix cache** | 14.8 s → 12.6 s (~15%) by not re-reading the system prompt |
+| Greedy decoding | same question, same answer |
+
+**Remaining, in rough value order — none started:**
+
+1. **Trim the system prompt itself.** It is ~100 tokens and now cached, so it costs
+   once per session rather than per question — but a shorter one would still cut the
+   first answer. Low risk, small win.
+2. **Cache the passage prefix too** when consecutive questions retrieve the same
+   slide. Common while revising one topic; would make follow-ups near-instant. More
+   bookkeeping, and the invalidation is where the bugs would be.
+3. **Quantize the KV cache** (`q8_0`). Frees memory and can help bandwidth-bound
+   decode. Untested here; needs its own A/B before any claim.
+4. **A smaller draft model for speculative decoding.** Real speedups on decode, but a
+   second model in 6 GB is a memory risk and this is the wrong week to find out.
+

@@ -48,11 +48,15 @@ A notification stealing focus mid-take has already invalidated two test runs.
       - repo must be **public**, GitHub About must show **Apache-2.0**
       - select the **Mobile AI** track
 - [ ] **2. Video** ≤ 3:00, public on YouTube, real device, no speed-ups.
-      Script: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — needs rewriting
-      for Cram; it still describes the speech demo.
-- [ ] **3. Final Devpost text** — lead with the KleidiAI finding, not the idea.
-      An offline RAG study app has been submitted before (Pinguin, Arm AI
-      Developer Challenge, no prize). The measurement is the differentiator.
+      Script is ready: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md), including a
+      validation pass, the shot list, and an analysis of what actually won the
+      last Arm challenge.
+- [ ] **3. Final Devpost text** — copy is drafted in
+      [`docs/plan/02-SUBMISSION.md`](docs/plan/02-SUBMISSION.md). Lead with the
+      KleidiAI finding, not the idea: **Jackqr**, an offline study app with
+      flashcards, took *third* in the previous Arm challenge, and Pinguin (same
+      category, laptop-class hardware) took nothing. The measurement is the
+      differentiator, and this year's theme is optimization.
 - [ ] **4. Optional: run the sweep on the Narzo** for a second, cross-vendor
       column. `powershell -ExecutionPolicy Bypass -File bench\otbench.ps1`
 

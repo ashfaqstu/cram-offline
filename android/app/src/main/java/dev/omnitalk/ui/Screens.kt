@@ -382,6 +382,7 @@ fun ReaderScreen(vm: AppState, onNavigateToSlides: () -> Unit) {
         DeckTitleBar(title = doc.title, onNavigateToSlides = onNavigateToSlides)
 
         // Sub-tab row
+        val ctx = LocalContext.current
         Row(
             Modifier
                 .fillMaxWidth()
@@ -397,8 +398,19 @@ fun ReaderScreen(vm: AppState, onNavigateToSlides: () -> Unit) {
             SubTabButton(
                 label = "Original PDF",
                 selected = showOriginal && canShowOriginal,
+                // Always tappable so we can show the toast; dimmed when unavailable
                 enabled = canShowOriginal,
-                onClick = { if (canShowOriginal) showOriginal = true },
+                onClick = {
+                    if (canShowOriginal) {
+                        showOriginal = true
+                    } else {
+                        android.widget.Toast.makeText(
+                            ctx,
+                            "Original PDF not available for this deck",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -457,7 +469,8 @@ private fun SubTabButton(
         shape = RoundedCornerShape(8.dp),
         color = if (selected) Paper.Blue else Paper.Card,
         border = BorderStroke(1.dp, if (selected) Paper.Blue else Paper.Rule),
-        modifier = modifier.clickable(enabled = enabled, onClick = onClick)
+        // Always intercept the click so onClick() can show a toast when disabled
+        modifier = modifier.clickable(onClick = onClick)
     ) {
         Text(
             label,

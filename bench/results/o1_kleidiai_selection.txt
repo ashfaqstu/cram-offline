@@ -1,6 +1,14 @@
+Captured on Poco M2 Pro (Snapdragon 720G, Armv8.2-A) with the KleidiAI build.
+llama-bench installs a null log callback unless -v is passed, which is why
+these lines are invisible in a normal benchmark run.
+
+  ./llama-bench -m <model> -p 8 -n 4 -r 1 -v
+
 === Q4_0 ===
 
-
-=== Q4_K_M ===
-
-
+kleidiai: no compatible q4 kernels found for CPU features mask 1
+kleidiai: no compatible q8 kernels found for CPU features mask 1
+kleidiai: no compatible f32 kernels found for CPU features mask 1
+kleidiai: SME disabled
+done_getting_tensors: tensor 'token_embd.weight' (q6_K) (and 162 others) cannot be used with preferred buffer type CPU_KLEIDIAI, using CPU instead
+kleidiai: no kernel for tensor type q6_K, not accelerated by KleidiAI (kernels available for Q4_0 and Q8_0)

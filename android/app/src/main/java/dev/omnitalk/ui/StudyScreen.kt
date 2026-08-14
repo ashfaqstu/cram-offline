@@ -358,9 +358,29 @@ private fun TopicPicker(vm: AppState) {
 
 @Composable
 private fun NumberBox(label: String, value: Int, max: Int, onChange: (Int) -> Unit) {
+    // THE FIELD OWNS ITS TEXT. Driving `value` straight off the Int made the box
+    // impossible to edit: deleting the last digit produced "", toIntOrNull()
+    // returned null, the callback never fired, and the old number reappeared
+    // under the cursor. Since the box could not be cleared, changing slide 1 to
+    // slide 5 meant typing onto the end of the 1 — which read as 15, got clamped
+    // to the deck length, and generated cards from the wrong slides entirely.
+    //
+    // Holding the raw string lets it be emptied and retyped. An out-of-range
+    // number is clamped and the box is corrected to what was actually applied,
+    // so the field never shows a slide the scope is not using.
+    var text by remember(value) { mutableStateOf(value.toString()) }
     OutlinedTextField(
-        value = value.toString(),
-        onValueChange = { s -> s.filter { it.isDigit() }.toIntOrNull()?.let { onChange(it.coerceIn(1, max)) } },
+        value = text,
+        onValueChange = { s ->
+            val digits = s.filter { it.isDigit() }.take(4)
+            text = digits
+            val n = digits.toIntOrNull()
+            if (n != null) {
+                val clamped = n.coerceIn(1, max)
+                onChange(clamped)
+                if (clamped != n) text = clamped.toString()
+            }
+        },
         label = { Text(label) },
         singleLine = true,
         modifier = Modifier.width(104.dp),

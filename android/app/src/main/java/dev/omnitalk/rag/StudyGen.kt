@@ -94,6 +94,27 @@ object StudyPrompt {
             "You are a friendly study assistant. You help students revise by turning " +
             "their lecture notes into flashcards."
         )
+        // THE WORKED EXAMPLES LIVE HERE, NOT NEXT TO THE NOTES.
+        //
+        // They used to sit two lines above the assistant header, which made them
+        // the most recent thing in context at the moment generation started — and
+        // a 1B model handed them straight back as content. Every deck produced
+        // "What do roots do?" and "Why do leaves need sunlight?" no matter what
+        // the slides said. Moving them into the system turn puts the whole of the
+        // notes between the example and the first generated token, so the nearest
+        // material to copy is the student's own.
+        //
+        // They stay concrete rather than abstract: with a placeholder pair like
+        // "Q: What is X? | A: X is Y", a slide of bare terms produced
+        // "Q: Mutual exclusion | A: Mutual exclusion", because nothing showed the
+        // two halves having to differ. And they stay about plant biology, which no
+        // deck here is about, so anything copied is obvious rather than plausible.
+        sb.append(" Each card is one line, a real question on the left and an ")
+        sb.append("explanation on the right, like these two:\n\n")
+        sb.append("Q: What do roots do? | A: They draw water and minerals out of the soil\n")
+        sb.append("Q: Why do leaves need sunlight? | A: Light powers the reaction that makes sugar\n\n")
+        sb.append("Those show the shape only. The content of every card you write comes ")
+        sb.append("from the notes the student gives you.")
         sb.append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
         sb.append("Here are notes from my lecture")
         if (scope is Scope.Topics && scope.titles.isNotEmpty()) {
@@ -107,24 +128,14 @@ object StudyPrompt {
         // Phrasing it as a rule ("no explanations, no extra text") is what
         // triggered the model's refusal earlier. Without it the model writes an
         // "Explanation:" paragraph after every card and exhausts the budget.
-        sb.append("Please make $count flashcards from these notes. ")
-        // Two worked examples, both showing a real question on the left and an
-        // explanation on the right. With the single abstract "Q: What is X? |
-        // A: X is Y", a slide that is only a list of bare terms produced cards
-        // like "Q: Mutual exclusion | A: Mutual exclusion" - the model copied the
-        // term across instead of explaining it, because nothing in the example
-        // showed the two halves differing.
-        //
-        // The examples are deliberately about plant biology, a subject no deck
-        // here is about. An earlier pair used deadlock terms, and a 1B model
-        // copied the example's answer into a real card word for word: the card
-        // read correctly and had nothing to do with the slide it cited. An
-        // example close to the material is an invitation to plagiarise it.
-        sb.append("Ask a real question on the left, and answer it on the right using what the ")
-        sb.append("notes say. Put each card on its own line like this:\n\n")
-        sb.append("Q: What do roots do? | A: They draw water and minerals out of the soil\n")
-        sb.append("Q: Why do leaves need sunlight? | A: Light powers the reaction that makes sugar\n\n")
-        sb.append("Those are just examples of the shape - your cards should come from my notes above. ")
+        sb.append("Please make $count flashcards from these notes above. ")
+        // The shape is demonstrated once, in the system turn. Repeating a worked
+        // example here would put copyable content back next to the generation
+        // point, which is the bug this ordering exists to avoid — so this is a
+        // reminder of the format with nothing in it worth copying.
+        sb.append("Ask a real question on the left, and answer it on the right using what my ")
+        sb.append("notes say. One card per line, in the ")
+        sb.append("\"Q: ... | A: ...\" shape. ")
         sb.append("Just the $count lines on their own, please - no explanations.")
         sb.append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n")
         return sb.toString()
@@ -160,6 +171,7 @@ object StudyPrompt {
                 .first().trim()
             if (front.length < 4 || back.length < 2) continue
             if (degenerate(front, back)) continue
+            if (echoesExample(front, back)) continue
             out.add(Card(question(front), back, pageFor("$front $back")))
         }
         return out
@@ -191,6 +203,35 @@ object StudyPrompt {
         if (f.isEmpty() || b.isEmpty()) return true
         return f == b || (b.length < f.length + 12 && (f.contains(b) || b.contains(f)))
     }
+
+    /**
+     * The worked example, handed back as if it were a card.
+     *
+     * Prompt ordering makes this rare; it does not make it impossible, and a 1B
+     * model asked the same question twice will not always answer the same way
+     * about where its content should come from. Every deck was producing
+     * "What do roots do?" and "Why do leaves need sunlight?" regardless of the
+     * slides, so the symptom is caught here as well as discouraged there —
+     * a check that cannot fail the way a phrasing can.
+     *
+     * Matching on the examples' subject rather than their wording is what makes
+     * this work: the model paraphrases as it copies ("what does the roots do"),
+     * so the strings differ while the vocabulary does not. Two hits are required
+     * so a single incidental "light" in a physics deck survives.
+     *
+     * The cost is a deck genuinely about plant biology, whose real cards would be
+     * dropped. That is the trade the examples' subject already made, and it is
+     * the right way round: a missing card is visible, an invented one is not.
+     */
+    private fun echoesExample(front: String, back: String): Boolean {
+        val text = "$front $back".lowercase()
+        return EXAMPLE_TERMS.count { Regex("\\b$it\\b").containsMatchIn(text) } >= 2
+    }
+
+    /** Content words of the two worked examples in [build]'s system turn. */
+    private val EXAMPLE_TERMS = listOf(
+        "roots", "soil", "minerals", "leaves", "sunlight", "sugar", "photosynthesis"
+    )
 
     private fun clean(s: String) = s
         .replace("**", "")

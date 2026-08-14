@@ -1,4 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.OmniTalk" parent="android:Theme.Material.NoActionBar" />
+    <!--
+      Light parent, and force-dark explicitly disabled.
+
+      With the system in dark mode, Android (and MIUI especially) applies its
+      "force dark" algorithm to apps that declare a light theme. It inverts what
+      it guesses is dark-on-light text — which turned the answer text and screen
+      titles near-white on our pale blue card while leaving the softer greys
+      alone. The result was an unreadable answer that looked like a colour bug in
+      Compose and was not.
+
+      This app commits to a paper look on purpose, so it opts out entirely.
+    -->
+    <style name="Theme.OmniTalk" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#FAF6EE</item>
+        <item name="android:navigationBarColor">#FFFDF9</item>
+        <item name="android:windowBackground">#FAF6EE</item>
+    </style>
 </resources>

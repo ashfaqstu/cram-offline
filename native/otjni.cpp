@@ -100,8 +100,14 @@ Java_dev_omnitalk_Native_llmLoad(JNIEnv* env, jobject, jstring jpath,
     // lowering only n_batch leaves n_ubatch larger than the batch and the compute
     // buffer overruns -> SIGSEGV inside ggml_vec_dot_*, which reads like a GGML
     // bug and is not. Set them together, always.
-    cp.n_batch         = 256;
-    cp.n_ubatch        = 256;
+    // Bigger micro-batches give the matmul more work per dispatch, which matters
+    // here because prefill only runs at ~2x decode speed on two A76 cores —
+    // context is unusually expensive on this class of CPU.
+    // n_ubatch MUST stay <= n_batch: the defaults are 2048/512, so lowering only
+    // n_batch leaves n_ubatch larger and the compute buffer overruns, producing a
+    // SIGSEGV inside ggml_vec_dot_* that reads like a GGML bug. Set them together.
+    cp.n_batch         = 512;
+    cp.n_ubatch        = 512;
 
     L->ctx = llama_init_from_model(L->model, cp);
     if (!L->ctx) { llama_model_free(L->model); delete L; return 0; }

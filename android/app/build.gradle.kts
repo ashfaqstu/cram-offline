@@ -60,4 +60,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.navigation:navigation-compose:2.8.4")
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    // Android's own PdfRenderer only rasterises pages — it exposes no text layer,
+    // so it cannot support search or retrieval. PdfBox-Android does, offline.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 }

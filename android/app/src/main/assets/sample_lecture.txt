@@ -1,0 +1,84 @@
+CSE 314 — Operating Systems
+Lecture 9: Deadlocks
+
+--- Slide 1 ---
+Course admin
+Assignment 3 is due on 27 March at 11:59 pm. Late submissions lose 10% per day
+up to three days, after which they are not accepted. The mid-term covers
+lectures 1 through 12. Office hours are Tuesday 2-4 pm in room CSE-301.
+
+--- Slide 2 ---
+What is a deadlock
+A set of processes is deadlocked when every process in the set is waiting for an
+event that only another process in the set can cause. The classic example is two
+processes each holding one resource and each requesting the resource the other
+holds. Neither can proceed, and neither will release what it holds.
+
+--- Slide 3 ---
+The four Coffman conditions
+A deadlock can arise only if all four of these hold at the same time:
+1. Mutual exclusion — at least one resource is held in a non-sharable mode.
+2. Hold and wait — a process holds at least one resource and is waiting for more.
+3. No preemption — a resource can be released only voluntarily by the process
+   holding it.
+4. Circular wait — there exists a set of waiting processes P0, P1, ... Pn such
+   that P0 waits for a resource held by P1, P1 for one held by P2, and Pn for one
+   held by P0.
+Breaking any single condition prevents deadlock.
+
+--- Slide 4 ---
+Deadlock handling strategies
+There are four broad approaches:
+- Prevention: design the system so one Coffman condition can never hold.
+- Avoidance: use advance knowledge of future requests to stay in a safe state.
+- Detection and recovery: allow deadlocks, detect them, then recover.
+- Ignore the problem: used by most general-purpose operating systems, including
+  Linux and Windows. This is called the ostrich algorithm.
+
+--- Slide 5 ---
+Banker's algorithm
+The Banker's algorithm is a deadlock avoidance algorithm due to Dijkstra. Each
+process declares its maximum resource need in advance. Before granting a request
+the system simulates the allocation and checks whether a safe sequence still
+exists. If it does, the request is granted; otherwise the process waits.
+Time complexity of the safety check is O(m x n^2), where m is the number of
+resource types and n is the number of processes.
+
+--- Slide 6 ---
+Safe state
+A state is safe if there exists an ordering of all processes such that each can
+obtain its maximum remaining need using currently available resources plus those
+held by earlier processes in the ordering. Every safe state is deadlock-free.
+An unsafe state is not necessarily a deadlock, but it may lead to one.
+
+--- Slide 7 ---
+Detection with a wait-for graph
+When every resource type has exactly one instance, deadlock detection reduces to
+finding a cycle in the wait-for graph. A cycle in the wait-for graph means a
+deadlock exists. With multiple instances per resource type a cycle is a necessary
+but not a sufficient condition, and a detection algorithm similar to the safety
+check must be used instead.
+
+--- Slide 8 ---
+Recovery
+Two options once a deadlock is detected:
+- Process termination: abort all deadlocked processes, or abort one at a time
+  until the cycle is broken.
+- Resource preemption: take a resource from a process and give it to another.
+  This requires selecting a victim, rolling that process back to a safe state,
+  and guarding against starvation of the same victim being chosen repeatedly.
+
+--- Slide 9 ---
+Livelock and starvation
+Livelock is different from deadlock: the processes are not blocked, but they
+keep changing state in response to one another and make no progress. Starvation
+means a process waits indefinitely because others are consistently preferred by
+the scheduler. Aging, which raises a process's priority the longer it waits, is
+the usual remedy for starvation.
+
+--- Slide 10 ---
+Summary
+Deadlock needs all four Coffman conditions simultaneously. Prevention breaks one
+condition by design, avoidance uses lookahead such as the Banker's algorithm,
+and detection allows deadlock then recovers. Most real operating systems simply
+ignore the problem because the cost of prevention outweighs the risk.

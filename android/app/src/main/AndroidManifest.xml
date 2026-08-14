@@ -1,19 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- No INTERNET permission. The app cannot phone home even by accident,
-         which is the strongest possible statement of "100% offline". -->
-
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE" />
-        </intent>
-    </queries>
+    <!-- No INTERNET permission, and no storage permission either: documents come
+         in through the system file picker, which grants access to just that one
+         file. The app cannot send your documents anywhere even by accident,
+         which is the strongest possible statement of "fully offline". -->
 
     <application
         android:allowBackup="false"
-        android:label="OmniTalk Edge"
+        android:label="Sift"
         android:supportsRtl="true"
         android:theme="@style/Theme.OmniTalk">
         <activity

@@ -36,7 +36,8 @@ fun StudyScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> U
         EmptyState("Nothing loaded yet", "Open a deck in the Slides tab to make flashcards from it.")
         return
     }
-    if (vm.cards.isNotEmpty() && vm.practiceIndex < vm.cards.size && vm.practiceStarted) {
+    // Bound against the run's own length: a drill run is shorter than the deck.
+    if (vm.practiceStarted && vm.practiceIndex < vm.practiceOrder().size) {
         PracticeView(vm, onCite); return
     }
 
@@ -128,11 +129,32 @@ fun StudyScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> U
             }
 
             if (vm.cards.isNotEmpty()) {
+                val missed = vm.missedCards().size
+                val known = vm.cards.size - missed
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SectionLabel("${vm.cards.size} cards from ${vm.cardsScope}")
                     Spacer(Modifier.weight(1f))
                     if (!vm.studying) {
                         Button(onClick = { vm.startPractice() }) { Text("Practise") }
+                    }
+                }
+                // Once a run has happened, the useful action is no longer
+                // "practise" - it is "practise the ones you got wrong". The app
+                // already knew which those were and used to discard it.
+                if (known > 0) {
+                    Spacer(Modifier.height(Space.s))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (missed == 0) "You knew all $known"
+                            else "$known known · $missed to drill",
+                            style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (missed > 0 && !vm.studying) {
+                            TextButton(onClick = { vm.drillMissed() }) {
+                                Text("Drill the $missed I missed")
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(Space.s))
@@ -180,18 +202,22 @@ fun StudyScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> U
 /** One card at a time, answer hidden, self-graded. The actual studying. */
 @Composable
 private fun PracticeView(vm: AppState, onCite: (Int) -> Unit) {
-    val card = vm.cards.getOrNull(vm.practiceIndex) ?: return
+    // A drill run walks only the missed cards, so the position and the total both
+    // come from the run's order rather than from the whole deck of cards.
+    val order = vm.practiceOrder()
+    val card = order.getOrNull(vm.practiceIndex)?.let { vm.cards.getOrNull(it) } ?: return
+    val drilling = vm.drillOnly.isNotEmpty()
     Column(Modifier.fillMaxSize().padding(Space.l)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "${vm.practiceIndex + 1} of ${vm.cards.size}",
+                "${vm.practiceIndex + 1} of ${order.size}" + if (drilling) "  ·  drilling" else "",
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = Mono), color = Paper.InkSoft
             )
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { vm.stopPractice() }) { Text("Done") }
         }
         LinearProgressIndicator(
-            progress = { (vm.practiceIndex + 1f) / vm.cards.size },
+            progress = { (vm.practiceIndex + 1f) / order.size },
             modifier = Modifier.fillMaxWidth(),
             color = Paper.Blue, trackColor = Paper.Rule
         )

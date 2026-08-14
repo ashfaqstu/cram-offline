@@ -193,6 +193,45 @@ fun AskScreen(vm: AppState, onCite: (Int) -> Unit, onNavigateToSlides: () -> Uni
                         }) { Text(s, style = MaterialTheme.typography.bodyMedium, color = Paper.Ink) }
                     }
                 }
+
+                // WHAT IS LEFT.
+                //
+                // The gap this closes: Cram could answer any question you already
+                // had, but cramming's first question is "what should I even be
+                // looking at?" - and at 1 a.m. with 40 slides you do not know what
+                // you do not know. The app was already recording which slide
+                // answered each question and which slides produced cards; it just
+                // threw that away. Shown here it turns the deck into a checklist.
+                val left = vm.untouchedPages()
+                val covered = doc.pageCount - left.size
+                if (covered > 0) {
+                    Spacer(Modifier.height(Space.m))
+                    Card {
+                        SectionLabel("Where you are")
+                        Spacer(Modifier.height(Space.s))
+                        LinearProgressIndicator(
+                            progress = { covered.toFloat() / doc.pageCount },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Paper.Blue, trackColor = Paper.Rule
+                        )
+                        Spacer(Modifier.height(Space.s))
+                        Text(
+                            if (left.isEmpty())
+                                "Every slide has been asked about or turned into a card."
+                            else "$covered of ${doc.pageCount} slides covered. " +
+                                 "Not looked at yet: " +
+                                 left.take(6).joinToString(", ") +
+                                 if (left.size > 6) " and ${left.size - 6} more" else "",
+                            style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
+                        )
+                        if (left.isNotEmpty()) {
+                            Spacer(Modifier.height(Space.s))
+                            TextButton(onClick = { vm.makeCardsFromPage(left.first()) }) {
+                                Text("Start on slide ${left.first()}")
+                            }
+                        }
+                    }
+                }
             }
 
             // EVIDENCE FIRST.

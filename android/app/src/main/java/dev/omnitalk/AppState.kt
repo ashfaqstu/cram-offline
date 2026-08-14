@@ -240,8 +240,76 @@ class AppState(app: Application) : AndroidViewModel(app) {
         pageFrom = 1; pageTo = minOf(d.pageCount, 5)
         selectedTopics.clear()
         clearCards()
+        restoreStudy(d)
         buildSuggestions(d)
     }
+
+    // ---- what a deck remembers ---------------------------------------------
+
+    /** Slides that have answered a question, per deck. */
+    private val askedPages = mutableStateListOf<Int>()
+    /** Slides that have produced a flashcard, per deck. */
+    private val cardedPages = mutableStateListOf<Int>()
+
+    private fun restoreStudy(d: Document) {
+        val s = store.loadStudy(d)
+        cards = s.cards
+        cardsScope = s.cardsScope
+        known.clear(); known.addAll(s.known)
+        askedPages.clear(); askedPages.addAll(s.askedPages)
+        cardedPages.clear(); cardedPages.addAll(s.cardedPages)
+    }
+
+    private fun persistStudy() {
+        val d = current ?: return
+        val snapshot = StudyState(
+            cards = cards, cardsScope = cardsScope,
+            known = known.toSet(),
+            askedPages = askedPages.toSet(), cardedPages = cardedPages.toSet()
+        )
+        viewModelScope.launch(Dispatchers.IO) { store.saveStudy(d, snapshot) }
+    }
+
+    /**
+     * How much of the deck has been looked at.
+     *
+     * Cramming's real question is not "what is X" but "am I done yet", and the
+     * app already knew the answer without showing it: it records which slide
+     * answered each question and which slides each card came from. Surfacing that
+     * turns a deck from a document into a checklist.
+     */
+    fun coveredPages(): Set<Int> = (askedPages + cardedPages).toSet()
+
+    /** Slides never asked about and never carded, in order. */
+    fun untouchedPages(): List<Int> {
+        val d = current ?: return emptyList()
+        val seen = coveredPages()
+        return (1..d.pageCount).filter { it !in seen }
+    }
+
+    /** Cards the last practice run did not mark as known. */
+    fun missedCards(): List<Int> = cards.indices.filter { it !in known }
+
+    /**
+     * Practise only what was missed.
+     *
+     * The highest-value thing a crammer can do is stop re-reading what they
+     * already know. Practice used to wipe [known] on every run, so the app
+     * measured that and immediately forgot it.
+     */
+    fun drillMissed() {
+        val missed = missedCards()
+        if (missed.isEmpty()) return
+        drillOnly.clear(); drillOnly.addAll(missed)
+        practiceStarted = true; practiceIndex = 0; practiceRevealed = false
+    }
+
+    /** Indices being drilled, or empty for "all cards". */
+    val drillOnly = mutableStateListOf<Int>()
+
+    /** The card indices the current practice run walks, in order. */
+    fun practiceOrder(): List<Int> =
+        if (drillOnly.isEmpty()) cards.indices.toList() else drillOnly.toList()
 
     /**
      * Suggested questions built from the deck's own headings.
@@ -293,8 +361,11 @@ class AppState(app: Application) : AndroidViewModel(app) {
             Regex("\"decode_tps\":([\\d.]+)").find(engine.lastTimings)
                 ?.let { lastDecodeTps = it.groupValues[1].toDouble() }
             streaming = false
-            history.add(0, QA(q, answer, passages.map { it.chunk.page }.distinct(),
-                System.currentTimeMillis() - t0))
+            val cited = passages.map { it.chunk.page }.distinct()
+            history.add(0, QA(q, answer, cited, System.currentTimeMillis() - t0))
+            // A slide that has answered a question counts as covered.
+            cited.forEach { if (it !in askedPages) askedPages.add(it) }
+            persistStudy()
         }
     }
 
@@ -370,6 +441,12 @@ class AppState(app: Application) : AndroidViewModel(app) {
             cardsScope = scopeSel.describe()
             studying = false
             if (cards.isEmpty()) flash("Nothing usable found in ${scopeSel.describe()}")
+            // New cards mean new questions, so what was previously "known" no
+            // longer refers to anything. Coverage survives — those slides were
+            // still studied.
+            known.clear()
+            cards.map { it.page }.distinct().forEach { if (it !in cardedPages) cardedPages.add(it) }
+            persistStudy()
         }
     }
 
@@ -407,17 +484,38 @@ class AppState(app: Application) : AndroidViewModel(app) {
 
     // ---- practice -----------------------------------------------------------
 
+    /**
+     * A full run over every card.
+     *
+     * [known] is deliberately NOT cleared. Wiping it meant the app measured what
+     * the reader did not know and then immediately forgot it, so "practise again"
+     * could only ever mean "start from nothing". Marks are corrected as you go
+     * instead, which is what makes [drillMissed] possible.
+     */
     fun startPractice() {
-        practiceStarted = true; practiceIndex = 0; practiceRevealed = false; known.clear()
+        drillOnly.clear()
+        practiceStarted = true; practiceIndex = 0; practiceRevealed = false
     }
 
-    fun stopPractice() { practiceStarted = false }
+    fun stopPractice() { practiceStarted = false; persistStudy() }
 
     fun practiceNext(gotIt: Boolean) {
-        if (gotIt) known.add(practiceIndex) else known.remove(practiceIndex)
+        val order = practiceOrder()
+        val card = order.getOrNull(practiceIndex) ?: return
+        if (gotIt) { if (card !in known) known.add(card) } else known.remove(card)
         practiceRevealed = false
-        if (practiceIndex < cards.lastIndex) practiceIndex++
-        else { practiceStarted = false; flash("Practised ${cards.size} cards, ${known.size} known") }
+        if (practiceIndex < order.lastIndex) {
+            practiceIndex++
+        } else {
+            practiceStarted = false
+            drillOnly.clear()
+            val left = missedCards().size
+            flash(
+                if (left == 0) "All ${cards.size} cards known"
+                else "${cards.size - left} of ${cards.size} known, $left to drill"
+            )
+        }
+        persistStudy()
     }
 
     private fun displayName(uri: Uri): String {

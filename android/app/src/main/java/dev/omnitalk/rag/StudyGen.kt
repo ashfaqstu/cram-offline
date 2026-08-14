@@ -15,6 +15,32 @@ import org.json.JSONArray
 data class Card(val front: String, val back: String, val page: Int)
 
 /**
+ * Everything a deck remembers between sessions beyond its text.
+ *
+ * [known] holds indices into [cards], which is only meaningful while those exact
+ * cards exist — so the two are always written and read together. Regenerating
+ * cards therefore resets what you knew, which is correct: they are different
+ * questions.
+ *
+ * [askedPages] and [cardedPages] are what makes "have I covered this deck?"
+ * answerable. The app already knows which slide answered each question and which
+ * slides each card came from; it simply used to throw that away.
+ */
+data class StudyState(
+    val cards: List<Card> = emptyList(),
+    val cardsScope: String = "",
+    val known: Set<Int> = emptySet(),
+    val askedPages: Set<Int> = emptySet(),
+    val cardedPages: Set<Int> = emptySet()
+) {
+    /** Slides that have either answered a question or produced a card. */
+    val touchedPages: Set<Int> get() = askedPages + cardedPages
+
+    /** Cards a completed practice run did not mark as known. */
+    fun missed(): List<Int> = cards.indices.filter { it !in known }
+}
+
+/**
  * How to choose which slides the cards come from.
  *
  * A topic is only a retrieval query, so a vague one pulls loosely related

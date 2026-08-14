@@ -35,12 +35,49 @@ generate them. That takes a minute or two; do it **before** recording, not durin
 
 # Part 2 — Video script
 
+## What actually won last time, and what it means for us
+
+From [Arm's own announcement](https://newsroom.arm.com/blog/arm-ai-dev-challenge) of the
+first Arm AI Developer Challenge — 142 submissions, six winners. Judged on
+**technological implementation, user experience, potential impact, and "wow" factor**.
+
+| Place | Project | What it was |
+|---|---|---|
+| 1st | **Chuck'it** | On-device bookmarking — save a screenshot or link, AI organises and semantically searches it |
+| 2nd | DreamMeridian | Natural-language map queries on a Raspberry Pi, offline |
+| 2nd | InstaMeme | Photos → memes, fully on-device iOS |
+| 3rd | **Jackqr** | **On-device study tool: scanned PDFs → clean searchable text, simplification, flashcards, spaced repetition** |
+| 3rd | Epictetus | Android chatbot **using KleidiAI**, XNNPack, MediaPipe |
+| 3rd | Pocket Garden | Gardening advice on a Pi |
+
+Three things to take from that list, and they should shape every second of the video.
+
+**1. Our category has already been done, and it placed third.** Jackqr is a
+flashcard-generating offline study app. Being an offline study app is therefore worth
+about third place. *The idea is not the pitch.* If the video spends its first minute
+explaining that studying from slides is hard, we are competing on the axis Jackqr
+already won and lost on.
+
+**2. The winner was instantly graspable.** Chuck'it can be explained in one sentence
+with one gesture — save a thing, find it later, privately. Not "more features": one
+loop, shown working. Cram's equivalent is **ask → cited answer → flashcard → drill**,
+and it must be shown as one continuous motion, not as a tour of five tabs.
+
+**3. This year the theme changed, and it changed in our favour.** That contest was the
+*AI Developer* Challenge. This one is the *AI **Optimization*** Challenge. Measurement
+is no longer a supporting detail — it is the subject. Jackqr's feature list would score
+the same today; our KleidiAI result would not.
+
+And one pointed detail: a third-place project last time **used KleidiAI as a selling
+point**. We have measured, on hardware two-thirds of the Android market is holding,
+that it does nothing at all — with the library's own log line as the witness. That is
+not a feature. That is a finding, and no app-shaped submission can manufacture one.
+
 ## The shape
 
-Lead with the finding, not the app. Every submission in this track shows an app; almost
-none shows a measurement that contradicts the platform vendor's own marketing. An
-offline RAG study app has been built before — the reason to watch this one is the
-number.
+**Lead with the finding, not the app.** Every entry shows an app. Almost none shows a
+measurement that contradicts the platform vendor's own marketing on the vendor's own
+hardware.
 
 | Time | Beat |
 |---|---|
@@ -81,16 +118,25 @@ Then the answer completes.
 phone is more credible than a suspicious jump cut, and the on-screen `first word` timer
 makes any edit obvious anyway.
 
-## 1:00–1:30 — Flashcards, via the cross-link
+## 1:00–1:30 — The loop, in one unbroken take
 
-Tap **"Make flashcards from slide 4"** directly under the answer.
+**Do not cut during this.** It is the Chuck'it lesson: one gesture, one loop, obviously
+useful. Tap **"Make flashcards from slide 6"** directly under the answer.
 
-> "The question I just asked becomes the thing I revise. Same slides, same retrieval —
-> it never leaves the document."
+> "The question I just asked becomes the thing I revise."
 
-Reveal a card. Show the `from slide 4` chip.
+Cards appear. Reveal one — show the `from slide 6` chip.
 
-> "Every card knows which slide it came from."
+> "Every card knows which slide it came from. And when I get one wrong—"
+
+Tap **Practise**, mark one wrong, finish, and land on **"Drill the 3 I missed"**.
+
+> "—it remembers, and drills only those. Close the app, come back: still there."
+
+Then the coverage strip on Ask:
+
+> "And it tells me what I haven't looked at yet. That's the actual question at 1 a.m. —
+> not 'what is a deadlock', but 'what have I still not opened'."
 
 ## 1:30–2:30 — The finding
 
@@ -154,4 +200,15 @@ Show the Brief / Balanced / Thorough presets.
 - ❌ "KleidiAI is broken" — it is inert *on this hardware*, and correct on i8mm/SME
 - ❌ "accelerated by i8mm / SME2" — this chip has neither
 - ❌ any latency figure not visible on screen at that moment
-- ❌ "the first app to do this" — it isn't, and the measurement is the point
+- ❌ "the first app to do this" — Jackqr placed third doing something adjacent, and a
+  judge who knows that will stop trusting the rest of the video
+
+## The thumbnail and title
+
+The judge sees these before a single frame. Put the finding in both.
+
+- **Title:** `Cram — I measured Arm's KleidiAI on a 2020 phone. It does nothing.`
+- **Thumbnail:** the phone in hand, airplane mode visible, one line of text:
+  **"KleidiAI: 0% faster"** — with the app's answer on screen behind it.
+
+Not "Cram: an offline study app". That title is Jackqr's, and it came third.

@@ -33,6 +33,8 @@ object Native {
     external fun llmGenerate(h: Long, maxTokens: Int, grammar: String?, cb: TokenCb?): String
 
     external fun llmResetKv(h: Long)
+    /** Truncate the KV cache to [keep] tokens; returns what was actually kept. */
+    external fun llmRewindKv(h: Long, keep: Int): Int
     external fun llmTimings(h: Long): String
     external fun llmFree(h: Long)
 

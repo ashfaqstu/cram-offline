@@ -80,6 +80,7 @@ class RagEngine {
      */
     private fun calibrate() {
         val probe = CALIBRATION_TEXT
+        dropPrefix()
         Native.llmResetKv(llm)
         val t0 = System.nanoTime()
         val tokens = Native.llmPrefill(llm, probe)
@@ -112,24 +113,69 @@ class RagEngine {
     /**
      * Answer from the retrieved passages, streaming tokens as they arrive.
      *
-     * The KV cache is cleared per question deliberately: each question gets a
-     * different set of passages, so there is no shared prefix worth keeping and a
-     * stale cache would silently poison the answer.
+     * Only the varying half of the prompt is re-sent. The passages and question
+     * differ every time, but the system instructions do not, so those stay in the
+     * KV cache between questions — see the note in the body. Anything that uses
+     * the context for another purpose must call [dropPrefix] first, or a rewind
+     * would keep the wrong tokens and silently poison the answer.
      */
     suspend fun answer(
         question: String,
         passages: List<Scored>,
         onToken: (String) -> Unit
     ): String = withContext(disp) {
-        Native.llmResetKv(llm)
-        val prompt = buildPrompt(question, passages)
-        Native.llmPrefill(llm, prompt)
+        // KEEP THE SYSTEM PROMPT IN THE CACHE.
+        //
+        // It is byte-identical on every question and about a hundred tokens
+        // long — roughly a quarter of the prefill for a typical query. At ~14 ms
+        // per character that was several seconds of re-reading the same
+        // instructions before every answer. Prefill it once, then rewind the
+        // cache to just that prefix and send only what changed.
+        val cached = if (systemTokens > 0) Native.llmRewindKv(llm, systemTokens) else 0
+        if (cached != systemTokens) {
+            Native.llmResetKv(llm)
+            systemTokens = Native.llmPrefill(llm, SYSTEM_PROMPT)
+        }
+        Native.llmPrefill(llm, buildUserTurn(question, passages))
         val out = Native.llmGenerate(llm, maxAnswerTokens, null, object : Native.TokenCb {
             override fun onToken(piece: String) = onToken(piece)
         })
         lastTimings = Native.llmTimings(llm)
         out.trim()
     }
+
+    /** Tokens the cached system prefix occupies, or 0 if it is not resident. */
+    private var systemTokens = 0
+
+    /**
+     * The half of the prompt that never changes, so it can stay in the KV cache.
+     *
+     * Ends mid-turn, at the user header: everything after this point varies per
+     * question and is sent fresh. Editing this string invalidates nothing on
+     * disk — the prefix is re-prefilled whenever the token count does not match.
+     */
+    private val SYSTEM_PROMPT = buildString {
+        append("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n")
+        // "One SHORT sentence" plus greedy decoding produced one-WORD answers:
+        // "what algorithm avoids deadlock" was answered "Avoidance" from a slide
+        // that names the Banker's algorithm in its first line. Technically a
+        // fragment of the truth and useless to revise from. The instruction now
+        // asks for a complete sentence that names the thing, which costs a few
+        // tokens and makes the answer stand on its own away from the slide.
+        append("You answer questions about a student's lecture slides. ")
+        append("Use only the excerpts given to you. ")
+        append("Answer in one complete sentence that names the specific thing asked about, ")
+        append("so the sentence makes sense on its own. Start with the answer, not a preamble. ")
+        append("If the excerpts do not contain the answer, reply exactly: Not in these slides.")
+        append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
+    }
+
+    /** The per-question half: retrieved passages, the question, the assistant header. */
+    private fun buildUserTurn(question: String, passages: List<Scored>): String =
+        buildPrompt(question, passages).removePrefix(SYSTEM_PROMPT)
+
+    /** Study and topic passes share the context, so they invalidate the prefix. */
+    private fun dropPrefix() { systemTokens = 0 }
 
     /**
      * Passage budget is enforced in characters rather than tokens: exact counting
@@ -178,19 +224,7 @@ class RagEngine {
         // Brevity is a latency feature, not a style preference: at ~9 tok/s a
         // 220-token answer takes 24 s, and the questions this is built for have
         // one-sentence answers.
-        sb.append("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n")
-        // "One SHORT sentence" plus greedy decoding produced one-WORD answers:
-        // "what algorithm avoids deadlock" was answered "Avoidance" from a slide
-        // that names the Banker's algorithm in its first line. Technically a
-        // fragment of the truth and useless to revise from. The instruction now
-        // asks for a complete sentence that names the thing, which costs a few
-        // tokens and makes the answer stand on its own away from the slide.
-        sb.append("You answer questions about a student's lecture slides. ")
-        sb.append("Use only the excerpts given to you. ")
-        sb.append("Answer in one complete sentence that names the specific thing asked about, ")
-        sb.append("so the sentence makes sense on its own. Start with the answer, not a preamble. ")
-        sb.append("If the excerpts do not contain the answer, reply exactly: Not in these slides.")
-        sb.append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
+        sb.append(SYSTEM_PROMPT)
         // The first passage is marked as the best match rather than left as one
         // of an unordered pair. Rank is information the retriever has and the
         // model otherwise never sees, and when a second passage is present it is
@@ -263,6 +297,7 @@ class RagEngine {
         }
         lastPromptChars = used
 
+        dropPrefix()
         Native.llmResetKv(llm)
         Native.llmPrefill(llm, StudyPrompt.build(scope, kept, count))
         val out = Native.llmGenerate(llm, count * TOKENS_PER_ITEM, null, object : Native.TokenCb {
@@ -333,6 +368,7 @@ class RagEngine {
             )
             sb.append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n")
 
+            dropPrefix()
             Native.llmResetKv(llm)
             Native.llmPrefill(llm, sb.toString())
             val raw = Native.llmGenerate(llm, TOPIC_TOKENS, null, null)

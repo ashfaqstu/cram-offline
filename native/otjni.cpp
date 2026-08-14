@@ -270,6 +270,36 @@ Java_dev_omnitalk_Native_llmResetKv(JNIEnv*, jobject, jlong h) {
     L->n_past = 0;
 }
 
+/**
+ * Drop the KV cache back to `keep` tokens instead of clearing it.
+ *
+ * The system prompt is byte-identical on every question, and prefill here costs
+ * about 14 ms per character — so re-reading roughly a hundred unchanged tokens
+ * before every single answer was pure waste, about a quarter of the total
+ * prefill work. Keeping that prefix resident and truncating only the part that
+ * varies (the retrieved passages and the question) is free on a desktop and
+ * worth seconds on this CPU.
+ *
+ * Returns the position actually kept, which the caller must trust over its own
+ * bookkeeping: if the cache has fewer tokens than requested the prefix is not
+ * there and the whole prompt has to be sent again.
+ */
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_omnitalk_Native_llmRewindKv(JNIEnv*, jobject, jlong h, jint keep) {
+    auto* L = reinterpret_cast<LlmCtx*>(h);
+    if (!L || !L->ctx) return 0;
+    std::lock_guard<std::mutex> lk(L->mu);
+    if (keep <= 0 || keep > L->n_past) {
+        llama_memory_clear(llama_get_memory(L->ctx), true);
+        L->n_past = 0;
+        return 0;
+    }
+    // Remove [keep, end). Sequence 0 is the only one this app uses.
+    llama_memory_seq_rm(llama_get_memory(L->ctx), 0, keep, -1);
+    L->n_past = keep;
+    return keep;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_omnitalk_Native_llmTimings(JNIEnv* env, jobject, jlong h) {
     auto* L = reinterpret_cast<LlmCtx*>(h);

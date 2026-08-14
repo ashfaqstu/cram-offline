@@ -106,26 +106,81 @@ A fast wrong answer at 2 a.m. is worse than a slow right one. Three things Cram 
 
 **Cards are checked before they're shown.** A card whose back merely restates its front teaches nothing, and a slide that is only a list of bare terms tempts a 1B model into producing exactly that. Those are dropped rather than padded out. Every card and every answer carries the slide it came from, so you can check the working.
 
+**The same question gives the same answer.** Decoding is greedy, not sampled. With a random seed per call, *"what algorithm avoids deadlock"* came back as the Banker's algorithm once and the ostrich algorithm the next time, from identical retrieved text — a study tool you cannot trust twice is not a study tool. Fixing it also exposed two real retrieval bugs that sampling had been hiding: no stemming (so `avoids` could not match `avoidance`), and a runner-up passage loose enough to out-vote the winner.
+
+---
+
+## Cramming is a session, not a query
+
+The night before an exam you do not know what you do not know. So Cram remembers:
+
+- **Cards survive.** They cost 90 seconds of the phone's time to write; they are stored with the deck, not held in memory until the app is backgrounded.
+- **It remembers what you got wrong.** Finish a round and the next action is *"Drill the 3 I missed"* — because the highest-value thing a crammer can do is stop re-reading what they already know.
+- **It tells you what is left.** *"5 of 11 slides covered. Not looked at yet: 1, 2, 4, 7, 8, 10."* Every answer already knew which slide it came from and every card which slide made it; that just used to be thrown away.
+
 The sample deck ships with the app, so the first thing you see is a real question answered from real slides.
 
 ---
 
-## Try it
+## Install it (no build required)
+
+You need an **arm64 Android phone** (Android 9+, 3 GB RAM or more) and about **900 MB free**.
+
+### 1. Install the app
+
+Download **`cram.apk`** from [Releases](../../releases/latest) and open it on the phone. Android will warn about installing outside the Play Store — that is expected for a sideloaded APK; allow it for your browser or file manager.
+
+*On Xiaomi/MIUI:* also turn on **Settings → Additional settings → Developer options → Install via USB** if you install over adb, or MIUI silently blocks it with `INSTALL_FAILED_USER_RESTRICTED`.
+
+### 2. Get the model
+
+Cram runs **Llama 3.2 1B Instruct, Q4_0** (~770 MB). We do not redistribute the weights.
+
+On the phone, open this link in any browser and let it download:
+
+**[Llama-3.2-1B-Instruct-Q4_0.gguf](https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf?download=true)**
+
+*(Hugging Face may ask you to accept Meta's licence first.)*
+
+If you want to check it is the file we measured against:
+`sha256 = fa0390e7c043f89ae1847bd6682d748041a99d4ef3de0e0b27d33b6af97a8be8`
+
+### 3. Point Cram at it
+
+Open Cram. On first run it shows a setup screen with one button — **Choose the model file** — which opens the system file picker. Select the `.gguf` you just downloaded, usually under **Downloads**. Cram copies it into its own storage (a few seconds) and starts. You can delete the download afterwards.
+
+That is the whole setup. A sample lecture deck ships inside the app, so you can ask a question immediately without finding a PDF.
+
+> ### Why doesn't it just download the model itself?
+>
+> Because that would require an `INTERNET` permission, and this app declares **none at all**. That is what makes "your notes cannot leave this phone" a property of the app rather than a promise in a policy — and you can verify it yourself under **App info → Permissions**, or by reading [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml), which has no `<uses-permission>` line of any kind.
+>
+> The system file picker grants access to exactly the one file you choose and needs no permission, so the cost is one extra tap. We think that is a fair price for the only guarantee here that nothing else offers.
+
+<details>
+<summary><b>Alternative: install the model over adb</b> (skips the in-app picker)</summary>
+
+```bash
+adb install -r cram.apk
+adb push Llama-3.2-1B-Instruct-Q4_0.gguf \
+         /sdcard/Android/data/dev.omnitalk/files/Llama-3.2-1B-Instruct-Q4_0.gguf
+```
+
+The filename must match exactly. That directory is app-specific external storage, so it needs no runtime permission and is removed when the app is uninstalled.
+</details>
+
+## Build it from source
 
 ```bash
 git clone --recursive https://github.com/ashfaqstu/cram-offline && cd cram-offline
 ./scripts/fetch_models.sh            # downloads + sha256-verifies weights (never committed)
 cd android && ./gradlew :app:assembleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
-adb push ../models/Llama-3.2-1B-Instruct-Q4_0.gguf \
-         /sdcard/Android/data/dev.omnitalk/files/
 ```
 
-Models live in app-specific external storage, so there is no runtime permission and no 770 MB copy.
+Needs JDK 21 and the Android NDK. `scripts/setup.sh` provisions the whole toolchain if you would rather not install Android Studio (we never did).
 
-**Reproduce the benchmarks on your own Arm phone:** [docs/REPRODUCE.md](docs/REPRODUCE.md). Open an issue with your device's CSV and we'll add it to the table.
-
-**Privacy is structural, not a promise.** The app declares no internet permission and no storage permission. It cannot send your documents anywhere, even by mistake.
+**Reproduce the benchmarks on your own Arm phone:** [docs/REPRODUCE.md](docs/REPRODUCE.md) — both build configurations, the exact sweep, and how to read a sign-changing difference as noise. Prebuilt `llama-bench` binaries with and without KleidiAI are in [`prebuilt/`](prebuilt/) so you can run the A/B without an NDK. Open an issue with your device's CSV and we'll add it to the table.
 
 ---
 

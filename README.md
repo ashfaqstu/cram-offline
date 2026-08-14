@@ -1,10 +1,15 @@
-# OmniTalk Edge
+# Cram
 
-**An offline AI agent that holds a goal-directed conversation in a language you don't speak — on a 2020 budget phone, in airplane mode, on the CPU.**
+**Ask your lecture slides a question and get an answer with the slide number, offline, on a 2020 budget phone.**
 
-You give it a goal, not a sentence. *"Find out when the bus leaves, whether it has AC, and the price."* It speaks to the other person in their language, tracks which facts it still needs in a state machine, asks its own follow-up questions, and hands you an English summary.
+Open a PDF of a lecture. Ask it anything. Cram finds the passage that answers you, shows you which slide it came from, and writes the answer from that passage — no network, no account, no upload. Then it turns the same slides into flashcards you can revise from.
 
 Built and measured on a **Poco M2 Pro** — Snapdragon 720G, 2× Cortex-A76 + 6× Cortex-A55, **Armv8.2-A with no i8mm, no SVE, no SME, no NPU path**, 6 GB RAM. Not a flagship. The phone most of the world is actually holding.
+
+| | | |
+|---|---|---|
+| ![Asking a question](bench/results/ui_ask.png) | ![Flashcards](bench/results/ui_cards.png) | ![Settings](bench/results/ui_settings.png) |
+| Answer, with the slide it came from | Cards made from the slides you chose | What it measured about your phone |
 
 ---
 
@@ -31,13 +36,35 @@ Differences of ±7% **with no consistent sign** — decode is marginally *faster
 
 **The cliff falls straight through the mid-tier install base.** If you are deploying to Armv8.2-A phones, KleidiAI will not save you; the gains have to come from somewhere else.
 
+The app tells you this about *your* phone, on the Settings screen, rather than asking you to take our word for it.
+
 > **Scope, stated honestly:** the Q4_0/Q8_0 guidance *is* correct on i8mm or SME hardware. We are not saying KleidiAI doesn't work — we are saying it doesn't engage here, and "here" is a very large number of phones. Note too that even a "Q4_0" GGUF carries `q6_K` embedding and output tensors, so coverage would be partial even with i8mm.
 
 ![KleidiAI makes no difference on Armv8.2-A](bench/results/chart_kleidiai.png)
 
 ---
 
-## Where the speed actually came from
+## The measurement that shaped the whole app
+
+On a desktop GPU, prefill (reading your prompt) runs 10–50× faster than decode (writing the answer). Every "just stuff more context in" RAG design assumes that ratio.
+
+**On this CPU, prefill runs at roughly twice decode — about 14 ms per character of prompt.**
+
+That single number rules out the standard approach. Retrieving eight passages and sending them all would cost half a minute before the first word appeared. So Cram is built the other way around:
+
+- **Retrieve many, send few.** BM25 ranks every passage in the deck in **1–7 ms**; only the best one or two are ever paid for in tokens.
+- **Greedy budget allocation.** The top passage takes as much of the character budget as it needs, and the runner-up gets whatever is left — rather than splitting evenly, which truncated the winner to make room for a passage that wasn't going to be used.
+- **Evidence first.** The matching slide text appears while the model is still writing. The retrieval *is* the answer for most questions; the model is there to phrase it.
+
+First word went from **34.5 s to ~11 s** — 3× — with retrieval itself never exceeding 7 ms.
+
+### The app sizes itself to the phone it is on
+
+A budget baked in on our device is wrong on every other one. At startup Cram times a real prefill and derives its own prompt budget from the result. The Settings screen shows the measurement, the values chosen from it, and lets you override them with the cost of each choice in seconds.
+
+---
+
+## Where the rest of the speed came from
 
 ### More threads is not more speed
 
@@ -53,7 +80,7 @@ Differences of ±7% **with no consistent sign** — decode is marginally *faster
 Two results worth carrying away:
 
 1. **Using all 8 cores makes decode 58% slower than using 6.** Every layer ends in a barrier, so the two fast A76s spend their time waiting on the six slow A55s. Adding cores adds stalls.
-2. **Prefill and decode want opposite thread counts** — prefill is compute-bound and scales to 8, decode is memory-bound and peaks at 6. llama.cpp exposes both (`n_threads`, `n_threads_batch`), so we run 6 and 8 respectively.
+2. **Prefill and decode want opposite thread counts** — prefill is compute-bound and scales to 8, decode is memory-bound and peaks at 6. llama.cpp exposes both (`n_threads`, `n_threads_batch`), so we run 6 and 8 respectively. This matters more here than in a chat app: reading the slides and writing the answer are separate phases of every single query.
 
 ### Two big cores beat all six little ones
 
@@ -61,27 +88,7 @@ Two results worth carrying away:
 
 The A76 pair delivers **2.5× the decode throughput of the entire A55 cluster** (8.64 vs 3.41 tok/s). This also corrected our own plan, which assumed decode belonged pinned to the big cluster. It doesn't: 6 unpinned threads (10.95) beat 2 pinned big threads (8.64), because the little cores do contribute real work at this model size.
 
-### The clusters genuinely run in parallel
-
-This is the result the whole architecture rests on:
-
-| | prefill | decode |
-|---|---:|---:|
-| LLM alone, big cluster | 12.89 | 8.74 |
-| LLM on big **+ Whisper hammering the LITTLE cluster** | 12.91 | 8.72 |
-
-**99.8% of solo throughput.** Running speech recognition on the A55s costs the language model essentially nothing — so ASR can transcribe *while the user is still speaking* rather than after.
-
-### Speech recognition has to be `tiny`
-
-![Whisper real-time factor](bench/results/chart_whisper_rtf.png)
-
-| model | threads | RTF |
-|---|---:|---:|
-| tiny q5_1 | 6 | **0.459** ✅ |
-| base q5_1 | 6 | 0.915 ❌ |
-
-`base` is technically under real time but has no headroom — it would fall behind the moment the CPU warms up or the LLM contends for cache. We ship `tiny` and record the accuracy cost in [docs/LANGUAGES.md](docs/LANGUAGES.md).
+> **A constraint worth knowing:** GGML fixes a thread pool's CPU affinity when the pool is created, and worker threads inherit it from whoever calls the load. Affinity must be set *before* the model loads, on the thread that will own it — and cannot be changed afterwards.
 
 ### Q4_0 over Q4_K_M — but not for the reason usually given
 
@@ -89,50 +96,28 @@ Q4_0 averages **18.1 tok/s prefill vs 15.7 for Q4_K_M (+15%)** — and that hold
 
 ---
 
-## Architecture — HetPipe
+## Getting the answer right, not just fast
 
-A 2 big + 6 LITTLE split is an awkward shape. Give every thread to one model and most of the chip idles; give all 8 threads to decode and it gets *slower*. HetPipe treats the clusters as two pools:
+A fast wrong answer at 2 a.m. is worse than a slow right one. Three things Cram does that a generic PDF chatbot does not:
 
-```
-NAIVE                                         time ──►
- record ████████
-                ASR ██████
-                          prefill ███
-                                     decode ████████
-                                                     TTS ███ ▶
+**Headings are ranked, not just matched.** Slide decks are written as "title, then content", so a slide called *The four Coffman conditions* is almost certainly the answer to *what are the four Coffman conditions*. Plain BM25 ranked a short Summary slide above the real definition, because length normalisation punished the longer slide that actually held the list. Heading terms and list structure carry extra weight.
 
-HETPIPE
- record ████████
-   LITTLE  ASR ▓▓ ▓▓ ▓▓ ▓▓   (chunked, during capture)
-   BIG          prefill ▓▓▓▓▓ (speculative, on partial transcript)
-   BIG                  decode ████
-   TTS                    ▶ speaks as soon as the question is complete
-```
+**The budget is floored, not minimised.** Tuning purely for speed drove the character budget down to ~400 — not enough to hold a four-item list, so the model answered quickly and *invented two of the four conditions*. The floor is now 900 characters, and the Settings ladder only climbs from there. Speed that costs correctness isn't a saving.
 
-| Worker | Cores | Threads |
-|---|---|---|
-| ASR (whisper.cpp) | pinned LITTLE `0x3F` | 6 |
-| LLM (llama.cpp) | unpinned | 6 decode / 8 prefill |
+**Cards are checked before they're shown.** A card whose back merely restates its front teaches nothing, and a slide that is only a list of bare terms tempts a 1B model into producing exactly that. Those are dropped rather than padded out. Every card and every answer carries the slide it came from, so you can check the working.
 
-> **A constraint worth knowing:** GGML fixes a thread pool's CPU affinity when the pool is created, and worker threads inherit it from whoever calls the load. Affinity must therefore be set *before* the model loads, on the thread that will own it — and it cannot be changed afterwards. Our original design called for switching the LLM to all-core once ASR finished; that is not possible, and the code says so where it would otherwise look like an omission.
-
-Latency work beyond scheduling:
-
-- **Grammar field order is an optimization.** The GBNF emits `q` (the question) *first*, so TTS can start after ~12 tokens instead of ~60. At ~9 tok/s, putting the slots first would delay speech by roughly 5 seconds.
-- **Single-letter JSON keys.** `"next_question"` costs ~4 tokens per turn; `"q"` costs 1.
-- **The static prompt prefix is pre-warmed** while the user picks an objective, so turn 1 prefills ~40 tokens instead of ~250.
-- **KV cache is retained across turns** — only new text is prefilled.
+The sample deck ships with the app, so the first thing you see is a real question answered from real slides.
 
 ---
 
 ## Try it
 
 ```bash
-git clone --recursive https://github.com/<you>/omnitalk-edge && cd omnitalk-edge
+git clone --recursive https://github.com/ashfaqstu/cram-offline && cd cram-offline
 ./scripts/fetch_models.sh            # downloads + sha256-verifies weights (never committed)
 cd android && ./gradlew :app:assembleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
-adb push ../models/Llama-3.2-1B-Instruct-Q4_0.gguf ../models/ggml-tiny-q5_1.bin \
+adb push ../models/Llama-3.2-1B-Instruct-Q4_0.gguf \
          /sdcard/Android/data/dev.omnitalk/files/
 ```
 
@@ -140,14 +125,15 @@ Models live in app-specific external storage, so there is no runtime permission 
 
 **Reproduce the benchmarks on your own Arm phone:** [docs/REPRODUCE.md](docs/REPRODUCE.md). Open an issue with your device's CSV and we'll add it to the table.
 
-The app reports what it detects about your silicon on launch — core split, clock, `dotprod`/`i8mm`, and whether KleidiAI can engage at all.
+**Privacy is structural, not a promise.** The app declares no internet permission and no storage permission. It cannot send your documents anywhere, even by mistake.
 
 ---
 
 ## What we cut, and why
 
-- **Camera OCR** — a multi-day Paddle-Lite integration contributing nothing to the optimization thesis.
-- **A bundled neural TTS (Piper / sherpa-onnx)** — TTS is not our optimization target; the platform engine is genuinely on-device and costs a day less.
+- **A vector database and an embedding model.** BM25 answers these decks in 1–7 ms. An embedding model would add a second model to load, hundreds of megabytes of RAM, and a prefill cost per chunk — to improve ranking on a corpus small enough that lexical overlap is already decisive.
+- **Multi-turn chat.** Every retained turn is prompt tokens re-read at 14 ms per character. A study tool is asked questions, not engaged in conversation.
+- **Mind maps.** A diagram is a lot of generated tokens for something a reader skims once; the slide list already gives the structure.
 - **ExecuTorch** — no grammar-constrained decoding, and a ~1.9 GB RSS `.pte` does not fit safely in 6 GB.
 - **Arm Performix** — it targets Neoverse server platforms, not phones.
 
@@ -157,4 +143,4 @@ The app reports what it detects about your silicon on launch — core split, clo
 
 Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-**Built with Llama.** Model weights are not redistributed; `scripts/fetch_models.sh` downloads and verifies them. llama.cpp, whisper.cpp and ggml are MIT; KleidiAI is Apache-2.0 and vendored under `third_party/` so the native build never needs the network.
+**Built with Llama.** Model weights are not redistributed; `scripts/fetch_models.sh` downloads and verifies them. llama.cpp and ggml are MIT; KleidiAI is Apache-2.0 and vendored under `third_party/` so the native build never needs the network. PDF text extraction uses PdfBox-Android (Apache-2.0).

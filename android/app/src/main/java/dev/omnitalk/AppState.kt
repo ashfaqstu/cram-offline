@@ -1,14 +1,16 @@
 package dev.omnitalk
 
-import android.content.Context
+import android.app.Application
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import dev.omnitalk.rag.*
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -18,17 +20,26 @@ import java.io.File
 private const val MODEL_FILE = "Llama-3.2-1B-Instruct-Q4_0.gguf"
 
 /**
- * All app state in one place. Small enough that a store/repository split would be
- * ceremony rather than structure — the screens are views over this.
+ * All app state, as a ViewModel.
+ *
+ * It used to be a plain object created in onCreate, which meant any
+ * configuration change - rotating, the system toggling dark mode, plugging in a
+ * keyboard - rebuilt it and silently discarded the loaded deck, the answer on
+ * screen and every generated flashcard. A ViewModel outlives Activity
+ * recreation, so work the reader waited 30 seconds for survives.
  */
-class AppState(private val ctx: Context, private val scope: CoroutineScope) {
+class AppState(app: Application) : AndroidViewModel(app) {
+
+    private val ctx get() = getApplication<Application>()
+    private val scope get() = viewModelScope
 
     val topo = Topology.read()
     val engine = RagEngine()
     val settings = Settings(ctx)
+    private val store = DocStore(ctx)
 
     var modelReady by mutableStateOf(false); private set
-    var status by mutableStateOf("starting…"); private set
+    var status by mutableStateOf(""); private set
 
     val docs = mutableStateListOf<Document>()
     var current by mutableStateOf<Document?>(null); private set
@@ -36,97 +47,75 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
     var busy by mutableStateOf(false); private set
     var busyLabel by mutableStateOf("")
 
-    /**
-     * Show a message, then take it away.
-     *
-     * A banner that never leaves stops being a message and becomes furniture —
-     * the old permanent core-count strip made the app look like a diagnostic
-     * tool. Anything worth saying is worth saying briefly.
-     */
-    private fun flash(text: String, ms: Long = 2600) {
-        status = text
-        scope.launch { delay(ms); if (status == text) status = "" }
-    }
-
-    // ask screen
+    // ask
     var question by mutableStateOf("")
     var answer by mutableStateOf("")
     var streaming by mutableStateOf(false); private set
     var passages by mutableStateOf<List<Scored>>(emptyList()); private set
     val history = mutableStateListOf<QA>()
+    var askedQuestion by mutableStateOf("")
+    /** Suggested questions, derived from THIS deck rather than hard-coded. */
+    var suggestions by mutableStateOf<List<String>>(emptyList()); private set
 
-    // stats
-    var lastPrefillTok by mutableStateOf(0)
+    // measurements
     var lastDecodeTps by mutableStateOf(0.0)
     var lastTtftMs by mutableStateOf(0L)
-    var lastRetrievalMs by mutableStateOf(0L)
-    /** Time from pressing send to evidence being on screen — the headline number. */
     var evidenceShownMs by mutableStateOf(0L)
-    var askedQuestion by mutableStateOf("")
 
     // reader
     var readerPage by mutableStateOf(1)
+    var requestedTab by mutableStateOf(-1)
 
-    // study: flashcards and quiz
-    var studyKind by mutableStateOf(StudyKind.Flashcards)
-    var studyTopic by mutableStateOf("")
+    // study
+    var scopeMode by mutableStateOf(ScopeMode.Topic)
+    /** Titles the reader ticked, from the deck's own headings. */
+    val selectedTopics = mutableStateListOf<String>()
+    var pageFrom by mutableStateOf(1)
+    var pageTo by mutableStateOf(1)
     var studyCount by mutableStateOf(5)
     var cards by mutableStateOf<List<Card>>(emptyList()); private set
     var studying by mutableStateOf(false); private set
     var studyMs by mutableStateOf(0L)
-    var revealed = mutableStateListOf<Int>()
+    var cardsScope by mutableStateOf(""); private set
+    val revealed = mutableStateListOf<Int>()
 
-    /**
-     * Build study material. Cards are parsed on every token, so they appear one
-     * at a time rather than after a silent twenty-second wait — the same reason
-     * answers stream.
-     */
-    fun generateStudy() {
-        if (!modelReady || studying || current == null) return
-        studying = true
-        cards = emptyList()
-        revealed.clear()
-        val t0 = System.currentTimeMillis()
-        scope.launch {
-            val sb = StringBuilder()
-            val (raw, _) = engine.study(studyKind, studyTopic, studyCount) { piece ->
-                sb.append(piece)
-                cards = StudyPrompt.parse(sb.toString()) { t -> engine.pageFor(t) }
-            }
-            val text = raw.ifBlank { sb.toString() }
-            android.util.Log.i("otstudy", "raw(${text.length}): ${text.take(600)}")
-            cards = StudyPrompt.parse(text) { t -> engine.pageFor(t) }
-            android.util.Log.i("otstudy", "parsed ${cards.size} cards")
-            studyMs = System.currentTimeMillis() - t0
-            studying = false
-            if (cards.isEmpty()) flash("Nothing found for that topic in these slides")
-        }
-    }
+    // practice
+    var practiceStarted by mutableStateOf(false)
+    var practiceIndex by mutableStateOf(0)
+    var practiceRevealed by mutableStateOf(false)
+    val known = mutableStateListOf<Int>()
 
-    fun toggleReveal(i: Int) {
-        if (revealed.contains(i)) revealed.remove(i) else revealed.add(i)
-    }
-
-    /** Lets non-UI code (the scripted test intent) drive navigation. 0=Slides 1=Ask 2=Source 3=Device */
-    var requestedTab by mutableStateOf(-1)
+    enum class ScopeMode { Deck, Pages, Topic }
 
     data class QA(val q: String, val a: String, val pages: List<Int>, val ms: Long)
 
+    private val pagesById = HashMap<String, List<String>>()
     val modelPath: File get() = File(ctx.getExternalFilesDir(null), MODEL_FILE)
 
-    fun boot() {
+    init { boot() }
+
+    private fun boot() {
         PdfText.init(ctx)
+        // Decks first, so the library is populated even while the model loads.
+        scope.launch {
+            val saved = withContext(Dispatchers.IO) { store.loadAll() }
+            for ((doc, pages) in saved) {
+                pagesById[doc.id] = pages
+                docs.add(doc)
+                val t = withContext(Dispatchers.IO) { store.loadTopics(doc) }
+                if (t.isNotEmpty()) generatedTopics[doc.id] = t
+            }
+            saved.firstOrNull()?.let { select(it.first) }
+        }
         if (!modelPath.exists()) {
-            status = "Model missing. Push it to:\n${modelPath.parent}"
+            status = "Model missing. Push it to ${modelPath.parent}"
             return
         }
-        status = "Measuring this phone…"
+        status = "Measuring this phone"
         scope.launch {
             val ok = engine.load(modelPath.absolutePath, topo)
             if (ok) {
-                settings.applyCalibration(
-                    engine.charBudget, engine.decodeThreads, engine.prefillThreads
-                )
+                settings.applyCalibration(engine.charBudget, engine.decodeThreads, engine.prefillThreads)
                 applySettings()
             }
             modelReady = ok
@@ -135,17 +124,21 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
         }
     }
 
-    /** Push settings into the engine. Cheap ones take effect immediately. */
+    /** Show a message, then take it away. A banner that never leaves is furniture. */
+    private fun flash(text: String, ms: Long = 2600) {
+        status = text
+        scope.launch { delay(ms); if (status == text) status = "" }
+    }
+
     fun applySettings() {
         engine.charBudget = settings.charBudget
         engine.maxAnswerTokens = settings.maxAnswerTokens
     }
 
-    /** Thread changes need the model rebuilt, because GGML fixes its pool at load. */
     fun reloadModel() {
         if (!modelReady) return
         modelReady = false
-        status = "Applying new thread settings…"
+        status = "Applying new settings"
         scope.launch {
             engine.close()
             val ok = engine.load(
@@ -160,11 +153,12 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
         }
     }
 
-    /** Import a PDF or text file the user picked. Extraction runs off the main thread. */
+    // ---- documents ----------------------------------------------------------
+
     fun importDoc(uri: Uri) {
         if (busy) return
         busy = true
-        busyLabel = "reading document…"
+        busyLabel = "Reading document"
         scope.launch {
             val name = displayName(uri)
             val res = withContext(Dispatchers.IO) {
@@ -176,60 +170,56 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
                 busy = false
                 return@launch
             }
-            busyLabel = "indexing…"
+            busyLabel = "Indexing"
             val chunks = withContext(Dispatchers.Default) { Chunker.chunk(res.pages) }
             val doc = Document(
-                id = uri.toString(),
-                title = res.title,
-                pageCount = res.pages.size,
-                chunks = chunks,
-                charCount = res.charCount
+                id = uri.toString(), title = res.title, pageCount = res.pages.size,
+                chunks = chunks, charCount = res.charCount
             )
             pagesById[doc.id] = res.pages
             docs.removeAll { it.id == doc.id }
             docs.add(0, doc)
+            withContext(Dispatchers.IO) { store.save(doc, res.pages) }
             select(doc)
             flash("Indexed ${doc.pageCount} pages into ${chunks.size} passages")
             busy = false
         }
     }
 
-    private val pagesById = HashMap<String, List<String>>()
-    fun pagesOf(d: Document): List<String> = pagesById[d.id] ?: emptyList()
-
-    /**
-     * Load the bundled sample deck.
-     *
-     * This exists because of how judges actually evaluate: if trying the app
-     * requires first finding a suitable PDF, most people never try it at all.
-     * One tap and there is a real document, real retrieval and a real answer.
-     * It also makes the whole pipeline testable from adb without a file picker.
-     */
     fun loadSample() {
         if (busy) return
         busy = true
-        busyLabel = "loading sample deck…"
+        busyLabel = "Loading sample deck"
         scope.launch {
             val text = withContext(Dispatchers.IO) {
                 ctx.assets.open("sample_lecture.txt").bufferedReader().use { it.readText() }
             }
-            // The sample marks its own slide boundaries so citations point at real slides.
             val pages = text.split(Regex("(?m)^--- Slide \\d+ ---$"))
                 .map { it.trim() }.filter { it.isNotEmpty() }
             val chunks = withContext(Dispatchers.Default) { Chunker.chunk(pages) }
             val doc = Document(
-                id = "sample://cse314-deadlocks",
-                title = "CSE 314 — Deadlocks (sample)",
-                pageCount = pages.size,
-                chunks = chunks,
-                charCount = text.length
+                id = "sample://cse314", title = "CSE 314 - Deadlocks (sample)",
+                pageCount = pages.size, chunks = chunks, charCount = text.length
             )
             pagesById[doc.id] = pages
             docs.removeAll { it.id == doc.id }
             docs.add(0, doc)
+            withContext(Dispatchers.IO) { store.save(doc, pages) }
             select(doc)
-            flash("Sample deck ready — ${chunks.size} passages indexed")
+            flash("Sample deck ready")
             busy = false
+        }
+    }
+
+    fun pagesOf(d: Document): List<String> = pagesById[d.id] ?: emptyList()
+
+    fun deleteDoc(d: Document) {
+        docs.remove(d)
+        pagesById.remove(d.id)
+        store.delete(d)
+        if (current?.id == d.id) {
+            current = null
+            docs.firstOrNull()?.let { select(it) }
         }
     }
 
@@ -237,67 +227,160 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
         current = d
         engine.setDocument(d)
         history.clear()
-        answer = ""
+        answer = ""; askedQuestion = ""; question = ""
         passages = emptyList()
         readerPage = 1
+        pageFrom = 1; pageTo = minOf(d.pageCount, 5)
+        selectedTopics.clear()
+        clearCards()
+        buildSuggestions(d)
     }
 
     /**
-     * THE latency design.
+     * Suggested questions built from the deck's own headings.
      *
-     * Generation runs at ~9 tok/s and that is not going to change. So the answer
-     * is not what the user waits for: retrieval finishes in ~5 ms, and the
-     * matching passage — with their own words highlighted — is on screen before
-     * the model has produced a single token. Perceived latency is ~50 ms instead
-     * of ~7 s, and the written answer arrives on top of evidence the user is
-     * already reading.
+     * They used to be three hard-coded strings about deadlocks, so importing a
+     * chemistry PDF still offered "What are the four Coffman conditions?" -
+     * which reads as broken. Headings make good questions because slide titles
+     * are already the topic, phrased.
      */
+    private fun buildSuggestions(d: Document) {
+        val heads = d.chunks
+            .asSequence()
+            .map { it.text.lineSequence().firstOrNull().orEmpty().trim() }
+            .filter { it.length in 8..60 && !it.endsWith(".") }
+            .distinct()
+            .take(8)
+            .toList()
+        suggestions = heads.shuffled().take(3).map { h ->
+            if (h.split(" ").size <= 3) "What is $h?" else "Explain: $h"
+        }
+    }
+
+    // ---- ask ----------------------------------------------------------------
+
     fun ask() {
         val q = question.trim()
-        val d = current
-        if (q.isEmpty() || d == null || !modelReady || streaming) return
-
+        if (q.isEmpty() || current == null || !modelReady || streaming) return
         streaming = true
         answer = ""
         askedQuestion = q
+        question = ""
         val t0 = System.currentTimeMillis()
-        var firstToken = 0L
+        var first = 0L
 
         scope.launch {
-            // ── instant: evidence on screen before generation begins ──────────
             passages = engine.retrieve(q)
-            lastRetrievalMs = engine.lastRetrievalMs
             evidenceShownMs = System.currentTimeMillis() - t0
-
             if (passages.isEmpty()) {
                 answer = "Not in these slides."
                 streaming = false
                 history.add(0, QA(q, answer, emptyList(), System.currentTimeMillis() - t0))
-                question = ""
                 return@launch
             }
-
             val sb = StringBuilder()
             engine.answer(q, passages) { piece ->
-                if (firstToken == 0L) {
-                    firstToken = System.currentTimeMillis()
-                    lastTtftMs = firstToken - t0
-                }
-                sb.append(piece)
-                answer = sb.toString()
+                if (first == 0L) { first = System.currentTimeMillis(); lastTtftMs = first - t0 }
+                sb.append(piece); answer = sb.toString()
             }
-
-            parseTimings(engine.lastTimings)
+            Regex("\"decode_tps\":([\\d.]+)").find(engine.lastTimings)
+                ?.let { lastDecodeTps = it.groupValues[1].toDouble() }
             streaming = false
             history.add(0, QA(q, answer, passages.map { it.chunk.page }.distinct(),
                 System.currentTimeMillis() - t0))
-            question = ""
         }
     }
 
-    private fun parseTimings(json: String) {
-        Regex("\"decode_tps\":([\\d.]+)").find(json)?.let { lastDecodeTps = it.groupValues[1].toDouble() }
-        Regex("\"prefill_tok\":(\\d+)").find(json)?.let { lastPrefillTok = it.groupValues[1].toInt() }
+    // ---- study --------------------------------------------------------------
+
+    private fun clearCards() {
+        cards = emptyList(); revealed.clear(); known.clear()
+        practiceIndex = 0; practiceRevealed = false; cardsScope = ""
+    }
+
+    /** Model-named topics per deck, once generated. Survives restarts. */
+    private val generatedTopics = mutableStateMapOf<String, List<Topic>>()
+    var topicPass by mutableStateOf<Pair<Int, Int>?>(null); private set
+
+    /** Generated topics if the pass has been run for this deck, else the headings. */
+    fun topics(): List<Topic> {
+        val d = current ?: return emptyList()
+        return generatedTopics[d.id] ?: d.topics
+    }
+
+    fun usingGeneratedTopics(): Boolean = current?.let { generatedTopics.containsKey(it.id) } == true
+
+    /** True when the deck's own headings are too poor to choose from. */
+    fun headingsWeak(): Boolean = (current?.headingQuality ?: 1f) < 0.5f
+
+    /**
+     * One pass over the deck to name its topics properly, then never again.
+     * Saved with the deck, so it survives restarts and is not recomputed.
+     */
+    fun generateTopics() {
+        val d = current ?: return
+        if (!modelReady || studying || topicPass != null) return
+        scope.launch {
+            topicPass = 0 to 1
+            val t = engine.generateTopics { i, n -> topicPass = i to n }
+            topicPass = null
+            if (t.isEmpty()) { flash("Could not read topics from this deck"); return@launch }
+            generatedTopics[d.id] = t
+            selectedTopics.clear()
+            withContext(Dispatchers.IO) { store.save(d, pagesOf(d), t) }
+            flash("Found ${t.size} topics in ${d.title}")
+        }
+    }
+
+    fun toggleTopic(t: String) {
+        if (selectedTopics.contains(t)) selectedTopics.remove(t) else selectedTopics.add(t)
+    }
+
+    fun currentScope(): Scope = when (scopeMode) {
+        ScopeMode.Deck -> Scope.WholeDeck
+        ScopeMode.Pages -> Scope.Pages(minOf(pageFrom, pageTo), maxOf(pageFrom, pageTo))
+        ScopeMode.Topic -> {
+            val picked = topics().filter { it.title in selectedTopics }
+            if (picked.isEmpty()) Scope.WholeDeck
+            else Scope.Topics(picked.map { it.title }, picked.flatMap { it.chunkIds }.toSet())
+        }
+    }
+
+    fun generateStudy() {
+        if (!modelReady || studying || current == null) return
+        val scopeSel = currentScope()
+        studying = true
+        clearCards()
+        val t0 = System.currentTimeMillis()
+        scope.launch {
+            val sb = StringBuilder()
+            val (raw, _) = engine.study(scopeSel, studyCount) { piece ->
+                sb.append(piece)
+                cards = StudyPrompt.parse(sb.toString()) { t -> engine.pageFor(t) }
+            }
+            cards = StudyPrompt.parse(raw.ifBlank { sb.toString() }) { t -> engine.pageFor(t) }
+            studyMs = System.currentTimeMillis() - t0
+            cardsScope = scopeSel.describe()
+            studying = false
+            if (cards.isEmpty()) flash("Nothing usable found in ${scopeSel.describe()}")
+        }
+    }
+
+    fun toggleReveal(i: Int) { if (revealed.contains(i)) revealed.remove(i) else revealed.add(i) }
+
+    // ---- practice -----------------------------------------------------------
+
+    fun startPractice() {
+        practiceStarted = true; practiceIndex = 0; practiceRevealed = false; known.clear()
+    }
+
+    fun stopPractice() { practiceStarted = false }
+
+    fun practiceNext(gotIt: Boolean) {
+        if (gotIt) known.add(practiceIndex) else known.remove(practiceIndex)
+        practiceRevealed = false
+        if (practiceIndex < cards.lastIndex) practiceIndex++
+        else { practiceStarted = false; flash("Practised ${cards.size} cards, ${known.size} known") }
     }
 
     private fun displayName(uri: Uri): String {
@@ -308,5 +391,5 @@ class AppState(private val ctx: Context, private val scope: CoroutineScope) {
         return uri.lastPathSegment ?: "document"
     }
 
-    fun close() = engine.close()
+    override fun onCleared() { engine.close(); super.onCleared() }
 }

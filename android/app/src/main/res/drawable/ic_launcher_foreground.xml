@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The same mark as in the app: a highlighter stroke swept across two lines of
+  text. It is what the product does - find the line that matters and mark it -
+  so the icon is the product rather than an abstract glyph.
+
+  Drawn inside the middle 66% of the 108dp canvas, so nothing important is lost
+  to the adaptive-icon mask on any launcher shape.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- upper line of text -->
+    <path
+        android:pathData="M31,42 L77,42"
+        android:strokeColor="#9AA1AB"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+
+    <!-- the highlighter sweep, under the ink -->
+    <path
+        android:pathData="M28,55 L80,55"
+        android:strokeColor="#FFE066"
+        android:strokeWidth="19"
+        android:strokeLineCap="round" />
+
+    <!-- the marked line -->
+    <path
+        android:pathData="M31,55 L73,55"
+        android:strokeColor="#23272E"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+
+    <!-- lower, shorter line -->
+    <path
+        android:pathData="M31,68 L62,68"
+        android:strokeColor="#9AA1AB"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+</vector>

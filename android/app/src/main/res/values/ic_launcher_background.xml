@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The paper stock the whole app is drawn on, so the icon reads as a page. -->
+    <color name="ic_launcher_background">#FAF6EE</color>
+</resources>

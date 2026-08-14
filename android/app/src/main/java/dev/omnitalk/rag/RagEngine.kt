@@ -217,33 +217,112 @@ class RagEngine {
      * topic rather than answer one narrow point.
      */
     suspend fun study(
-        kind: StudyKind,
-        topic: String,
+        scope: Scope,
         count: Int,
         onToken: (String) -> Unit
-    ): Pair<String, List<Scored>> = withContext(disp) {
-        val query = topic.ifBlank { doc?.title.orEmpty() }
-        val hits = index?.search(query, STUDY_TOP_K).orEmpty()
-        if (hits.isEmpty()) return@withContext "" to emptyList()
+    ): Pair<String, List<Chunk>> = withContext(disp) {
+        val all = doc?.chunks.orEmpty()
+        if (all.isEmpty()) return@withContext "" to emptyList()
+
+        // A page range is an exact instruction, so it selects directly. A topic
+        // is a guess, so it goes through retrieval. Whole-deck spreads the
+        // budget across the document rather than clustering at the start.
+        val candidates: List<Chunk> = when (scope) {
+            is Scope.Pages -> all.filter { it.page in scope.from..scope.to }
+            // Topics come from the deck's own headings, so the slides are known
+            // exactly. No retrieval, no near-miss, no drifting off topic.
+            is Scope.Topics -> all.filter { it.id in scope.chunkIds }
+            Scope.WholeDeck -> spread(all, STUDY_TOP_K)
+        }
+        if (candidates.isEmpty()) return@withContext "" to emptyList()
 
         var used = 0
-        val kept = ArrayList<Scored>()
-        for (h in hits) {
+        val kept = ArrayList<Chunk>()
+        for (c in candidates) {
             val room = STUDY_CHAR_BUDGET - used
             if (room < MIN_USEFUL_PASSAGE) break
-            val text = Trim.toQuery(h.chunk.text, query, minOf(room, TOP_PASSAGE_MAX))
-            kept.add(Scored(h.chunk.copy(text = text), h.score))
+            val text = c.text.take(minOf(room, TOP_PASSAGE_MAX))
+            kept.add(c.copy(text = text))
             used += text.length
         }
         lastPromptChars = used
 
         Native.llmResetKv(llm)
-        Native.llmPrefill(llm, StudyPrompt.build(kind, topic, kept, count))
+        Native.llmPrefill(llm, StudyPrompt.build(scope, kept, count))
         val out = Native.llmGenerate(llm, count * TOKENS_PER_ITEM, null, object : Native.TokenCb {
             override fun onToken(piece: String) = onToken(piece)
         })
         lastTimings = Native.llmTimings(llm)
         out to kept
+    }
+
+    /** Evenly spaced passages, so "whole deck" is not just the first few slides. */
+    private fun spread(all: List<Chunk>, n: Int): List<Chunk> {
+        if (all.size <= n) return all
+        val step = all.size.toDouble() / n
+        return (0 until n).map { all[(it * step).toInt().coerceIn(all.indices)] }
+    }
+
+    /** Slides the reader is most likely to want to ask about, for suggested questions. */
+    fun keyChunks(n: Int): List<Chunk> = spread(doc?.chunks.orEmpty(), n)
+
+    /**
+     * Read the deck once and name its topics.
+     *
+     * Headings are free and instant, but only work when the deck actually has
+     * titles. Continuous prose, scanned notes and papers give none, and the
+     * topic list degenerates to "Slide 1, Slide 2, ...", which is no help in
+     * deciding what to revise.
+     *
+     * So this is offered as a deliberate one-time pass: the deck is read in
+     * small batches, the model names what each batch is about, and the result is
+     * saved with the deck and never recomputed. It costs about a minute once,
+     * and every flashcard afterwards is built from a topic the model itself
+     * recognised, together with the exact slides it came from.
+     */
+    suspend fun generateTopics(onProgress: (Int, Int) -> Unit): List<Topic> = withContext(disp) {
+        val all = doc?.chunks.orEmpty()
+        if (all.isEmpty()) return@withContext emptyList()
+
+        val batches = all.chunked(TOPIC_BATCH)
+        val out = ArrayList<Topic>()
+        for ((i, batch) in batches.withIndex()) {
+            onProgress(i + 1, batches.size)
+            val sb = StringBuilder()
+            sb.append("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n")
+            sb.append("You are a friendly study assistant who helps students organise their notes.")
+            sb.append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
+            for (c in batch) {
+                sb.append(c.text.take(TOPIC_CHARS_PER_CHUNK).trim()).append("\n\n")
+            }
+            sb.append(
+                "What are the main topics in these notes? Give me at most 2, " +
+                "each a short phrase of two to five words, one per line. Just the lines, please."
+            )
+            sb.append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n")
+
+            Native.llmResetKv(llm)
+            Native.llmPrefill(llm, sb.toString())
+            val raw = Native.llmGenerate(llm, TOPIC_TOKENS, null, null)
+
+            val names = raw.lineSequence()
+                .map { it.trim().trim('-', '*', '.', ' ').replace(Regex("^\\d+[.)]\\s*"), "") }
+                .filter { it.length in 3..60 && it.count { c -> c == ' ' } <= 6 }
+                .take(2).toList()
+
+            for (n in names) {
+                out.add(Topic(n, batch.minOf { it.page }, batch.maxOf { it.page }, batch.map { it.id }))
+            }
+            if (names.isEmpty()) {
+                out.add(Topic("Slides ${batch.minOf { it.page }}-${batch.maxOf { it.page }}",
+                    batch.minOf { it.page }, batch.maxOf { it.page }, batch.map { it.id }))
+            }
+        }
+        // Same title from two batches means one topic spanning both.
+        out.groupBy { it.title.lowercase() }.map { (_, g) ->
+            Topic(g.first().title, g.minOf { it.fromPage }, g.maxOf { it.toPage },
+                g.flatMap { it.chunkIds }.distinct())
+        }
     }
 
     /** Which slide a generated card most likely came from, for citation. */
@@ -300,6 +379,12 @@ class RagEngine {
         // to, and a budget that only just fits perfect output produces one card
         // and a truncated second. Overshooting costs nothing when it stops early.
         const val TOKENS_PER_ITEM = 70
+        // Small batches: the model names a handful of slides accurately, but
+        // asked to summarise the whole deck at once it produces vague headings
+        // and blows the context.
+        const val TOPIC_BATCH = 4
+        const val TOPIC_CHARS_PER_CHUNK = 420
+        const val TOPIC_TOKENS = 40
 
         private val CALIBRATION_TEXT = buildString {
             append("Calibration passage. ")

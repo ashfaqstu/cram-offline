@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -23,12 +24,13 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var vm: AppState
+    // by viewModels(), not a field built in onCreate: a ViewModel survives
+    // Activity recreation, so a loaded deck and 30 seconds of generated
+    // flashcards are not thrown away by a configuration change.
+    private val vm: AppState by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        vm = AppState(this, lifecycleScope)
-        vm.boot()
         setContent { SiftTheme { Root(vm) } }
         handleTestIntent(intent)
     }
@@ -57,7 +59,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onDestroy() { vm.close(); super.onDestroy() }
 }
 
 private enum class Tab(val label: String) {

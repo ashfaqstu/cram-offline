@@ -47,6 +47,11 @@ data class Chunk(
     }
 }
 
+/** A heading found in the deck, and the slides it covers. */
+data class Topic(val title: String, val fromPage: Int, val toPage: Int, val chunkIds: List<Int>) {
+    val pages: String get() = if (fromPage == toPage) "slide $fromPage" else "slides $fromPage-$toPage"
+}
+
 data class Document(
     val id: String,
     val title: String,
@@ -55,6 +60,63 @@ data class Document(
     val charCount: Int
 ) {
     val indexed: Boolean get() = chunks.isNotEmpty()
+
+    /**
+     * The deck's topics, taken from its own slide headings.
+     *
+     * Read once when the deck is indexed and reused from then on. Asking the
+     * reader to type a topic made them guess at words the deck might use, and a
+     * near-miss quietly produced cards about the wrong slides. The headings are
+     * already the topics, written by whoever made the deck.
+     *
+     * Derived rather than generated: extracting headings is string work that
+     * takes milliseconds, where asking the model to summarise every slide would
+     * take minutes on this hardware and could invent topics the deck lacks.
+     */
+    val topics: List<Topic> by lazy { extractTopics(chunks) }
+
+    /**
+     * How well the headings worked.
+     *
+     * When a deck has no real slide titles - continuous prose, scanned notes,
+     * a paper - every chunk falls back to "Slide N" and the topic list is
+     * useless for choosing what to revise. Measuring that lets the app offer
+     * the slower LLM pass exactly when it is worth its minute, instead of
+     * always or never.
+     */
+    val headingQuality: Float by lazy {
+        if (topics.isEmpty()) 0f
+        else topics.count { !it.title.startsWith("Slide ") }.toFloat() / topics.size
+    }
+
+    companion object {
+        private fun looksLikeHeading(s: String): Boolean {
+            val t = s.trim()
+            if (t.length !in 3..70) return false
+            if (t.endsWith(".") || t.endsWith(",")) return false
+            if (t.count { it == ' ' } > 9) return false          // a sentence, not a title
+            return t.firstOrNull()?.isLetterOrDigit() == true
+        }
+
+        fun extractTopics(chunks: List<Chunk>): List<Topic> {
+            val out = LinkedHashMap<String, MutableList<Chunk>>()
+            var currentTitle: String? = null
+            for (c in chunks) {
+                val head = c.text.lineSequence().firstOrNull()?.trim().orEmpty()
+                if (looksLikeHeading(head)) currentTitle = head
+                val key = currentTitle ?: "Slide ${c.page}"
+                out.getOrPut(key) { mutableListOf() }.add(c)
+            }
+            return out.map { (title, cs) ->
+                Topic(
+                    title = title,
+                    fromPage = cs.minOf { it.page },
+                    toPage = cs.maxOf { it.page },
+                    chunkIds = cs.map { it.id }
+                )
+            }
+        }
+    }
 }
 
 /**

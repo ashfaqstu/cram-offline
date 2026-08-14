@@ -14,9 +14,30 @@ import org.json.JSONArray
  */
 data class Card(val front: String, val back: String, val page: Int)
 
-enum class StudyKind(val label: String, val verb: String) {
-    Flashcards("Flashcards", "Make flashcards"),
-    Quiz("Quiz", "Quiz me")
+/**
+ * How to choose which slides the cards come from.
+ *
+ * A topic is only a retrieval query, so a vague one pulls loosely related
+ * slides and the cards wander. Most of the time the reader already knows the
+ * answer in page numbers - "chapter 3 is slides 12 to 20" - and a range is an
+ * exact instruction where a topic is a guess.
+ */
+sealed interface Scope {
+    data object WholeDeck : Scope
+    data class Pages(val from: Int, val to: Int) : Scope
+    /** Topics picked from the deck's own headings — exact, not a search. */
+    data class Topics(val titles: List<String>, val chunkIds: Set<Int>) : Scope
+
+    fun describe(): String = when (this) {
+        WholeDeck -> "the whole deck"
+        is Pages -> if (from == to) "slide $from" else "slides $from to $to"
+        is Topics -> when (titles.size) {
+            0 -> "no topic"
+            1 -> titles.first()
+            2 -> "${titles[0]} and ${titles[1]}"
+            else -> "${titles[0]} and ${titles.size - 1} more"
+        }
+    }
 }
 
 object StudyPrompt {
@@ -40,44 +61,29 @@ object StudyPrompt {
      * exactly the same grounding, because the notes are right there in the
      * message and there is nothing else to draw on.
      */
-    fun build(kind: StudyKind, topic: String, passages: List<Scored>, count: Int): String {
+    fun build(scope: Scope, passages: List<Chunk>, count: Int): String {
         val sb = StringBuilder()
         sb.append("<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n")
         sb.append(
-            when (kind) {
-                StudyKind.Flashcards ->
-                    "You are a friendly study assistant. You help students revise by turning " +
-                    "their lecture notes into flashcards."
-                StudyKind.Quiz ->
-                    "You are a friendly study assistant. You help students revise by writing " +
-                    "short practice questions from their lecture notes."
-            }
+            "You are a friendly study assistant. You help students revise by turning " +
+            "their lecture notes into flashcards."
         )
         sb.append("<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n")
         sb.append("Here are notes from my lecture")
-        if (topic.isNotBlank()) sb.append(" about ").append(topic.trim())
-        sb.append(":\n\n")
-        for (p in passages) {
-            sb.append("[slide ").append(p.chunk.page).append("] ")
-                .append(p.chunk.text.trim()).append("\n\n")
+        if (scope is Scope.Topics && scope.titles.isNotEmpty()) {
+            sb.append(" about ").append(scope.titles.joinToString(", "))
         }
-        sb.append(
-            when (kind) {
-                // "Just the cards on their own, please" is a request, not a
-                // prohibition. Phrasing it as a rule ("no explanations, no extra
-                // text") is what triggered the model's refusal earlier. Without
-                // it the model writes an "Explanation:" paragraph after every
-                // card and exhausts the token budget after the first one.
-                StudyKind.Flashcards ->
-                    "Please make $count flashcards from these notes. Put each card on its own " +
-                    "line like this:\n\nQ: What is X? | A: X is Y\n\n" +
-                    "Just the $count lines on their own, please - no explanations."
-                StudyKind.Quiz ->
-                    "Please write $count short practice questions from these notes, with the " +
-                    "answers. Put each on its own line like this:\n\nQ: What is X? | A: X is Y\n\n" +
-                    "Just the $count lines on their own, please - no explanations."
-            }
-        )
+        sb.append(":\n\n")
+        for (c in passages) {
+            sb.append("[slide ").append(c.page).append("] ").append(c.text.trim()).append("\n\n")
+        }
+        // "Just the lines on their own, please" is a request, not a prohibition.
+        // Phrasing it as a rule ("no explanations, no extra text") is what
+        // triggered the model's refusal earlier. Without it the model writes an
+        // "Explanation:" paragraph after every card and exhausts the budget.
+        sb.append("Please make $count flashcards from these notes. ")
+        sb.append("Put each card on its own line like this:\n\nQ: What is X? | A: X is Y\n\n")
+        sb.append("Just the $count lines on their own, please - no explanations.")
         sb.append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n")
         return sb.toString()
     }

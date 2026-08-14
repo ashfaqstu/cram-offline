@@ -43,3 +43,6 @@ android/local.properties
 native/build-test/
 native/build-agptest/
 prebuilt/
+
+# scratch commit-message file
+.commitmsg

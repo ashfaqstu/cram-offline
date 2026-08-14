@@ -161,26 +161,22 @@ Download **`cram.apk`** from [Releases](../../releases/latest) and open it on th
 
 Cram runs **Llama 3.2 1B Instruct, Q4_0** (~770 MB). We do not redistribute the weights.
 
-On the phone, open this link in any browser and let it download:
+Open Cram. On first run it shows a setup screen with two buttons:
 
-**[Llama-3.2-1B-Instruct-Q4_0.gguf](https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf?download=true)**
+1. **Download the model (opens your browser)** — hands the Hugging Face link to your browser, which downloads it to your Downloads folder. *(Hugging Face may ask you to accept Meta's licence first.)*
+2. **Choose the model file** — opens the system file picker. Select the `.gguf` you just downloaded. Cram copies it into its own storage (a few seconds) and starts, so you can delete the download afterwards.
 
-*(Hugging Face may ask you to accept Meta's licence first.)*
-
-If you want to check it is the file we measured against:
+If you would rather fetch it yourself, it is
+**[Llama-3.2-1B-Instruct-Q4_0.gguf](https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf?download=true)**, and to check it is the file we measured against:
 `sha256 = fa0390e7c043f89ae1847bd6682d748041a99d4ef3de0e0b27d33b6af97a8be8`
-
-### 3. Point Cram at it
-
-Open Cram. On first run it shows a setup screen with one button — **Choose the model file** — which opens the system file picker. Select the `.gguf` you just downloaded, usually under **Downloads**. Cram copies it into its own storage (a few seconds) and starts. You can delete the download afterwards.
 
 That is the whole setup. A sample lecture deck ships inside the app, so you can ask a question immediately without finding a PDF.
 
-> ### Why doesn't it just download the model itself?
+> ### Why doesn't it download the model itself?
 >
-> Because that would require an `INTERNET` permission, and this app declares **none at all**. That is what makes "your notes cannot leave this phone" a property of the app rather than a promise in a policy — and you can verify it yourself under **App info → Permissions**, or by reading [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml), which has no `<uses-permission>` line of any kind.
+> The button above opens your **browser**, and the download happens there — in an app that already has network access. Cram fetching the file itself would require an `INTERNET` permission, and this app declares **none at all**. That is what makes "your notes cannot leave this phone" a property of the app rather than a promise in a policy — verify it under **App info → Permissions**, or read [AndroidManifest.xml](android/app/src/main/AndroidManifest.xml), which has no `<uses-permission>` line of any kind.
 >
-> The system file picker grants access to exactly the one file you choose and needs no permission, so the cost is one extra tap. We think that is a fair price for the only guarantee here that nothing else offers.
+> Handing a URL to the browser needs no permission, and the system file picker grants access to exactly the one file you choose. The cost is one tap back into the app. We think that is a fair price for the only guarantee here that nothing else offers.
 
 <details>
 <summary><b>Alternative: install the model over adb</b> (skips the in-app picker)</summary>

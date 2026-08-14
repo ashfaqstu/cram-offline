@@ -583,12 +583,20 @@ private fun PdfPageItem(renderer: PdfRenderer?, index: Int) {
  * computer, and knowing what adb is. Anyone evaluating the app rather than
  * building it was simply stuck at a dead end.
  *
- * It stays a manual step on purpose: fetching the weights in-app would need an
- * INTERNET permission, and this app's strongest claim is that it holds none.
+ * The download still happens outside the app on purpose: fetching the weights
+ * ourselves would need an INTERNET permission, and this app's strongest claim is
+ * that it holds none. The button below hands the URL to the browser instead,
+ * which needs no permission and costs the reader one tap back.
  */
+private const val MODEL_FILE_NAME = "Llama-3.2-1B-Instruct-Q4_0.gguf"
+private const val MODEL_URL =
+    "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/" +
+    "$MODEL_FILE_NAME?download=true"
+
 @Composable
 fun SetupScreen(vm: AppState, onPickModel: () -> Unit) {
     val progress = vm.modelCopyProgress
+    val ctx = LocalContext.current
     Box(Modifier.fillMaxSize().background(Paper.Stock)) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l),
@@ -623,13 +631,37 @@ fun SetupScreen(vm: AppState, onPickModel: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium, color = Paper.Ink
                 )
                 Spacer(Modifier.height(Space.m))
-                Step(1, "Download the model", "Llama-3.2-1B-Instruct-Q4_0.gguf from Hugging Face, " +
-                     "in any browser. It lands in your Downloads folder.")
-                Step(2, "Tap the button below", "Pick that file. Cram copies it into its own " +
-                     "storage, so you can delete the download afterwards.")
+                Step(1, "Download the model", "Tap below to open Hugging Face in your browser. " +
+                     "It is one file, and it lands in your Downloads folder.")
+                Step(2, "Come back and pick it", "Cram copies it into its own storage, so you " +
+                     "can delete the download afterwards.")
                 Step(3, "That is all", "It never needs the internet again — and it has no " +
                      "permission to use it.")
                 Spacer(Modifier.height(Space.m))
+                // ACTION_VIEW hands the URL to whatever browser is installed, so the
+                // download happens in that app's process. Cram still declares no
+                // INTERNET permission — this button cannot be used to send anything.
+                OutlinedButton(
+                    onClick = {
+                        val i = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW, Uri.parse(MODEL_URL)
+                        )
+                        try {
+                            ctx.startActivity(i)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(
+                                ctx,
+                                "No browser found. Download $MODEL_FILE_NAME on a computer " +
+                                "and copy it to this phone.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Download the model (opens your browser)")
+                }
+                Spacer(Modifier.height(Space.s))
                 Button(onClick = onPickModel, modifier = Modifier.fillMaxWidth()) {
                     Text("Choose the model file")
                 }
@@ -638,13 +670,14 @@ fun SetupScreen(vm: AppState, onPickModel: () -> Unit) {
             Spacer(Modifier.height(Space.m))
 
             Card {
-                SectionLabel("Why not just download it for you")
+                SectionLabel("Why the browser, and not the app")
                 Spacer(Modifier.height(Space.s))
                 Text(
-                    "Doing that would mean asking Android for internet access. This app " +
-                    "declares no internet permission at all, which is what makes it unable " +
-                    "to send your documents anywhere. Check it yourself under App info → " +
-                    "Permissions. One extra tap seemed a fair price.",
+                    "The button above opens your browser — the download happens there, in " +
+                    "an app that already has internet access. Cram fetching the file itself " +
+                    "would mean asking Android for the INTERNET permission, and holding none " +
+                    "is what makes this app unable to send your documents anywhere. Check it " +
+                    "yourself under App info → Permissions. One tap back seemed a fair price.",
                     style = MaterialTheme.typography.bodySmall, color = Paper.InkSoft
                 )
             }

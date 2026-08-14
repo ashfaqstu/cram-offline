@@ -94,8 +94,6 @@ class AppState(app: Application) : AndroidViewModel(app) {
     private val pdfUriById = HashMap<String, Uri>()
     val modelPath: File get() = File(ctx.getExternalFilesDir(null), MODEL_FILE)
 
-    init { boot() }
-
     private fun boot() {
         PdfText.init(ctx)
         // Decks first, so the library is populated even while the model loads.
@@ -591,4 +589,12 @@ class AppState(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() { engine.close(); super.onCleared() }
+
+    // Last declaration in the class, deliberately. Kotlin runs property
+    // initializers and init blocks in declaration order, and boot() touches
+    // needsModel and generatedTopics, both declared below where init used to
+    // sit. On a phone with no model on disk, `needsModel = true` ran before
+    // its mutableStateOf delegate existed and threw NPE at launch — and that
+    // is the only path a fresh install ever takes.
+    init { boot() }
 }

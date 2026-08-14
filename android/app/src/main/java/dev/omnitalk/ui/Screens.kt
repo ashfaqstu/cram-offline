@@ -56,7 +56,11 @@ fun LibraryScreen(vm: AppState, onPick: () -> Unit, onOpen: () -> Unit) {
             ) {
                 itemsIndexed(vm.docs) { i, d ->
                     Appear(delayMs = i * 60) {
-                        DocCard(d, d.id == vm.current?.id) { vm.select(d); onOpen() }
+                        DocCard(
+                            d, d.id == vm.current?.id,
+                            onClick = { vm.select(d); onOpen() },
+                            onDelete = { vm.deleteDoc(d) }
+                        )
                     }
                 }
             }
@@ -75,9 +79,25 @@ private fun <T> androidx.compose.foundation.lazy.LazyListScope.itemsIndexed(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DocCard(d: Document, selected: Boolean, onClick: () -> Unit) {
+private fun DocCard(d: Document, selected: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
     Card(Modifier.clickable(onClick = onClick), accent = selected) {
-        Text(d.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, color = Paper.Ink)
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                d.title, style = MaterialTheme.typography.titleMedium,
+                maxLines = 2, color = Paper.Ink, modifier = Modifier.weight(1f)
+            )
+            // Two taps to delete, no dialog. A dialog for one destructive action
+            // on a list item is heavier than the action deserves; asking in
+            // place is enough to stop an accident.
+            TextButton(onClick = { if (confirming) onDelete() else confirming = true }) {
+                Text(
+                    if (confirming) "Really?" else "Remove",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (confirming) Paper.RedPen else Paper.InkFaint
+                )
+            }
+        }
         Spacer(Modifier.height(Space.s))
         // FlowRow, not Row: on a narrow screen the last pill was squeezed to a
         // few characters wide and wrapped one letter per line.
@@ -87,6 +107,7 @@ private fun DocCard(d: Document, selected: Boolean, onClick: () -> Unit) {
         ) {
             Pill("${d.pageCount} slides")
             Pill("${d.chunks.size} passages")
+            if (d.isSample) Pill("sample", Tone.Mark)
             if (selected) Pill("open", Tone.Good)
         }
     }
@@ -204,6 +225,16 @@ fun AskScreen(vm: AppState, onCite: (Int) -> Unit) {
                                 Pill("evidence ${vm.evidenceShownMs} ms", Tone.Good)
                                 Pill("first word %.1fs".format(vm.lastTtftMs / 1000.0))
                             }
+                        }
+                    }
+                    // The obvious next thing to do with an answer you just read:
+                    // revise it. Without this the reader has to walk to another
+                    // tab and hunt for the same slide by hand.
+                    if (!vm.streaming && vm.passages.isNotEmpty()) {
+                        Spacer(Modifier.height(Space.s))
+                        val page = vm.passages.first().chunk.page
+                        TextButton(onClick = { vm.makeCardsFromPage(page) }) {
+                            Text("Make flashcards from slide $page")
                         }
                     }
                     Spacer(Modifier.height(Space.m))

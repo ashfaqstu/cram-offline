@@ -153,11 +153,17 @@ fun StudyScreen(vm: AppState, onCite: (Int) -> Unit) {
                         Spacer(Modifier.height(Space.s))
                         if (vm.revealed.contains(i)) {
                             Text(c.back, style = MaterialTheme.typography.bodyMedium, color = Paper.Ink)
-                            if (c.page > 0) {
-                                Spacer(Modifier.height(Space.s))
-                                Box(Modifier.clickable { onCite(c.page) }) {
-                                    Pill("from slide ${c.page}", Tone.Mark)
+                            Spacer(Modifier.height(Space.s))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (c.page > 0) {
+                                    Box(Modifier.clickable { onCite(c.page) }) {
+                                        Pill("from slide ${c.page}", Tone.Mark)
+                                    }
                                 }
+                                Spacer(Modifier.weight(1f))
+                                // A card you could not answer is exactly when you
+                                // want the fuller explanation.
+                                TextButton(onClick = { vm.askAbout(c.front) }) { Text("Ask about this") }
                             }
                         } else {
                             Text("Tap to reveal", style = MaterialTheme.typography.bodySmall, color = Paper.Blue)
@@ -216,6 +222,11 @@ private fun PracticeView(vm: AppState, onCite: (Int) -> Unit) {
         }
 
         if (vm.practiceRevealed) {
+            TextButton(
+                onClick = { vm.stopPractice(); vm.askAbout(card.front) },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) { Text("Explain this properly") }
+            Spacer(Modifier.height(Space.s))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                 OutlinedButton(
                     onClick = { vm.practiceNext(false) }, modifier = Modifier.weight(1f)

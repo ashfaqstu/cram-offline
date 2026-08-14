@@ -82,7 +82,23 @@ object StudyPrompt {
         // triggered the model's refusal earlier. Without it the model writes an
         // "Explanation:" paragraph after every card and exhausts the budget.
         sb.append("Please make $count flashcards from these notes. ")
-        sb.append("Put each card on its own line like this:\n\nQ: What is X? | A: X is Y\n\n")
+        // Two worked examples, both showing a real question on the left and an
+        // explanation on the right. With the single abstract "Q: What is X? |
+        // A: X is Y", a slide that is only a list of bare terms produced cards
+        // like "Q: Mutual exclusion | A: Mutual exclusion" - the model copied the
+        // term across instead of explaining it, because nothing in the example
+        // showed the two halves differing.
+        //
+        // The examples are deliberately about plant biology, a subject no deck
+        // here is about. An earlier pair used deadlock terms, and a 1B model
+        // copied the example's answer into a real card word for word: the card
+        // read correctly and had nothing to do with the slide it cited. An
+        // example close to the material is an invitation to plagiarise it.
+        sb.append("Ask a real question on the left, and answer it on the right using what the ")
+        sb.append("notes say. Put each card on its own line like this:\n\n")
+        sb.append("Q: What do roots do? | A: They draw water and minerals out of the soil\n")
+        sb.append("Q: Why do leaves need sunlight? | A: Light powers the reaction that makes sugar\n\n")
+        sb.append("Those are just examples of the shape - your cards should come from my notes above. ")
         sb.append("Just the $count lines on their own, please - no explanations.")
         sb.append("<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n")
         return sb.toString()
@@ -117,9 +133,37 @@ object StudyPrompt {
                 .split(Regex("(?im)^\\s*(?:\\*\\*)?\\s*(?:Card\\s*\\d|Explanation\\s*:)"))
                 .first().trim()
             if (front.length < 4 || back.length < 2) continue
-            out.add(Card(front, back, pageFor("$front $back")))
+            if (degenerate(front, back)) continue
+            out.add(Card(question(front), back, pageFor("$front $back")))
         }
         return out
+    }
+
+    /** The model often drops the question mark. Restore it rather than show "What is a deadlock". */
+    private fun question(front: String): String =
+        if (front.endsWith("?") || front.endsWith(".") || front.endsWith(":")) front
+        else if (Regex("^(?i)(what|why|how|when|where|which|who|name|list|define|give)\\b")
+                .containsMatchIn(front)) "$front?"
+        else front
+
+    /**
+     * A card whose back merely restates its front teaches nothing.
+     *
+     * Slides that are just a list of bare terms ("Mutual exclusion / Hold and
+     * wait / ...") tempt the model into copying the term across both halves.
+     * Such a card looks fine in a list and is worthless the moment it is turned
+     * over, so it is dropped rather than shown — a short deck of real cards
+     * beats a full one padded with echoes.
+     */
+    private fun degenerate(front: String, back: String): Boolean {
+        fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9 ]"), " ")
+            .replace(Regex("\\s+"), " ").trim()
+            .removePrefix("what is ").removePrefix("what does ").removePrefix("what are ")
+            .removeSuffix(" mean").trim()
+        val f = norm(front)
+        val b = norm(back)
+        if (f.isEmpty() || b.isEmpty()) return true
+        return f == b || (b.length < f.length + 12 && (f.contains(b) || b.contains(f)))
     }
 
     private fun clean(s: String) = s

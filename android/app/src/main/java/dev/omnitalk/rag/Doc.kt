@@ -60,6 +60,7 @@ data class Document(
     val charCount: Int
 ) {
     val indexed: Boolean get() = chunks.isNotEmpty()
+    val isSample: Boolean get() = id.startsWith("sample://")
 
     /**
      * The deck's topics, taken from its own slide headings.

@@ -197,8 +197,10 @@ class AppState(app: Application) : AndroidViewModel(app) {
             val pages = text.split(Regex("(?m)^--- Slide \\d+ ---$"))
                 .map { it.trim() }.filter { it.isNotEmpty() }
             val chunks = withContext(Dispatchers.Default) { Chunker.chunk(pages) }
+            // No "(sample)" in the title: a suffix in the name makes the library
+            // look like it has a test file in it. It is marked with a badge.
             val doc = Document(
-                id = "sample://cse314", title = "CSE 314 - Deadlocks (sample)",
+                id = "sample://cse314", title = "CSE 314 - Deadlocks",
                 pageCount = pages.size, chunks = chunks, charCount = text.length
             )
             pagesById[doc.id] = pages
@@ -367,6 +369,36 @@ class AppState(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleReveal(i: Int) { if (revealed.contains(i)) revealed.remove(i) else revealed.add(i) }
+
+    // ---- cross-links --------------------------------------------------------
+    //
+    // Ask and Study were two islands: you could get an answer about slide 4 and
+    // then have to walk to the other tab and hunt for slide 4 again to revise
+    // it. These turn four features into one product - each screen offers the
+    // obvious next thing to do with what is on it.
+
+    /** From an answer or a card, jump to Ask with the question already asked. */
+    fun askAbout(text: String) {
+        question = text
+        requestedTab = TAB_ASK
+        ask()
+    }
+
+    /** From an answer's citation, make cards from exactly that slide. */
+    fun makeCardsFromPage(page: Int) {
+        scopeMode = ScopeMode.Pages
+        pageFrom = page; pageTo = page
+        requestedTab = TAB_STUDY
+        generateStudy()
+    }
+
+    /** From a topic, ask about it instead of revising it. */
+    fun askAboutTopic(t: Topic) = askAbout("Explain ${t.title}")
+
+    companion object {
+        const val TAB_ASK = 1
+        const val TAB_STUDY = 2
+    }
 
     // ---- practice -----------------------------------------------------------
 
